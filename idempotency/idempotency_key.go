@@ -1,53 +1,13 @@
-package main
+package idempotency
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/http"
 	"time"
 )
 
-type RecoveryPointEnum string
-
-const (
-	RecoveryPointStarted       RecoveryPointEnum = "started"
-	RecoveryPointRideCreated                     = "ride_created"
-	RecoveryPointChargeStarted                   = "charge_started"
-	RecoveryPointFinished                        = "finished"
-)
-
-func (rp RecoveryPointEnum) IsValid() bool {
-	switch rp {
-	case RecoveryPointStarted, RecoveryPointRideCreated,
-		RecoveryPointChargeStarted,
-		RecoveryPointFinished:
-		return true
-	default:
-		return false
-	}
-}
-
-type RequestMethod string
-
-func (m RequestMethod) IsValid() bool {
-	switch m {
-	case http.MethodGet,
-		http.MethodHead,
-		http.MethodPost,
-		http.MethodPut,
-		http.MethodPatch,
-		http.MethodDelete,
-		http.MethodConnect,
-		http.MethodOptions,
-		http.MethodTrace:
-		return true
-	default:
-		return false
-	}
-}
-
-type IdempotencyKey struct {
+type Key struct {
 	ID        int
 	CreatedAt time.Time
 	Key       string
@@ -65,7 +25,7 @@ type IdempotencyKey struct {
 	UserID        int
 }
 
-type IdempotencyKeyParams struct {
+type KeyParams struct {
 	Key           string
 	RequestMethod RequestMethod
 	RequestParams []byte
@@ -78,7 +38,7 @@ func GetIdempotencyKey(
 	tx *sql.Tx,
 	userID int,
 	key string,
-) (*IdempotencyKey, error) {
+) (*Key, error) {
 	stmt, err := tx.PrepareContext(ctx,
 		`
 		SELECT
@@ -95,7 +55,7 @@ func GetIdempotencyKey(
 	}
 	defer stmt.Close()
 
-	var iKey IdempotencyKey
+	var iKey Key
 	err = stmt.QueryRowContext(ctx, userID, key).Scan(
 		&iKey.ID, &iKey.CreatedAt, &iKey.Key, &iKey.LastRunAt, &iKey.LockedAt,
 		&iKey.RequestMethod, &iKey.RequestParams, &iKey.RequestPath,
@@ -112,8 +72,8 @@ func GetIdempotencyKey(
 func InsertIdempotencyKey(
 	ctx context.Context,
 	tx *sql.Tx,
-	params IdempotencyKeyParams,
-) (*IdempotencyKey, error) {
+	params KeyParams,
+) (*Key, error) {
 	stmt, err := tx.PrepareContext(ctx,
 		`INSERT INTO rocket_rides.public.idempotency_keys (
 		idempotency_key, 
@@ -137,7 +97,7 @@ func InsertIdempotencyKey(
 		return nil, fmt.Errorf("preparing statement: %w", err)
 	}
 
-	var key IdempotencyKey
+	var key Key
 
 	row := stmt.QueryRow(
 		params.Key,
@@ -159,10 +119,10 @@ func InsertIdempotencyKey(
 	return &key, nil
 }
 
-func UpdateIdempotencyKey(tx *sql.Tx, key *IdempotencyKey) (*IdempotencyKey, error) {
+func UpdateIdempotencyKey(tx *sql.Tx, key *Key) (*Key, error) {
 	return nil, nil
 }
 
-func DeleteIdempotencyKey(tx *sql.Tx, key *IdempotencyKey) error {
+func DeleteIdempotencyKey(tx *sql.Tx, key *Key) error {
 	return nil
 }

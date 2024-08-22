@@ -1,13 +1,9 @@
-package main
+package api
 
 import (
 	"database/sql"
 	"net/http"
 )
-
-type paymentServer struct {
-	DB *sql.DB
-}
 
 func NewServer(db *sql.DB) http.Handler {
 	mux := http.NewServeMux()

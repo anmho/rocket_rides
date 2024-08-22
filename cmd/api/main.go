@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/anmho/idempotent-rides/api"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"log"
 	"log/slog"
@@ -18,21 +19,25 @@ const (
 	dbName = "rocket_rides"
 )
 
-var (
-	dbURL = makeConnString(dbUser, dbPass, dbPort, dbHost, dbName)
+const (
+	port = 8080
 )
 
-func makeConnString(
+var (
+	dbURL = MakeConnString(dbUser, dbPass, dbPort, dbHost, dbName)
+)
+
+func MakeConnString(
 	user, pass, host, port, name string) string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, pass, host, name, port)
 }
 
 func main() {
 	db, err := sql.Open("pgx", dbURL)
-	mux := NewServer(db)
+	mux := api.NewServer(db)
 
 	srv := http.Server{
-		Addr:    ":8080",
+		Addr:    fmt.Sprintf(":%d", port),
 		Handler: mux,
 	}
 
@@ -40,9 +45,10 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	slog.Info("server starting", slog.Int("port", port))
 	if err := srv.ListenAndServe(); err != nil {
 		if !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("error starting server %s", slog.String("error", err.Error()))
+			slog.Error("error starting api %s", slog.String("error", err.Error()))
 		}
 	}
 }

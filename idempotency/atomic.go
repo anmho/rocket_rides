@@ -1,4 +1,4 @@
-package main
+package idempotency
 
 import (
 	"context"
@@ -18,7 +18,7 @@ type AtomicPhaseResult struct {
 }
 type BlockFunc func(tx *sql.Tx) (AtomicPhaseResult, error)
 
-func AtomicPhase(ctx context.Context, key *IdempotencyKey, db *sql.DB, block BlockFunc) error {
+func AtomicPhase(ctx context.Context, key *Key, db *sql.DB, block BlockFunc) error {
 	tx, err := db.BeginTx(ctx, nil)
 	result, err := block(tx)
 	if err != nil {

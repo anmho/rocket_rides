@@ -1,4 +1,4 @@
-package main
+package idempotency
 
 import (
 	"context"
@@ -51,7 +51,7 @@ func must[T any](t T, err error) T {
 	return t
 }
 
-func assertEqualIdempotencyKey(t *testing.T, expectedIdempotencyKey, idempotencyKey *IdempotencyKey) {
+func assertEqualIdempotencyKey(t *testing.T, expectedIdempotencyKey, idempotencyKey *Key) {
 	assert.Equal(t, expectedIdempotencyKey.ID, idempotencyKey.ID, "key id")
 	assert.Equal(t, expectedIdempotencyKey.Key, idempotencyKey.Key, "key strings")
 	assert.Equal(t, expectedIdempotencyKey.UserID, idempotencyKey.UserID, "UserID")
@@ -74,7 +74,7 @@ func Test_GetIdempotencyKey(t *testing.T) {
 		key    string
 
 		expectedErr            bool
-		expectedIdempotencyKey *IdempotencyKey
+		expectedIdempotencyKey *Key
 	}{
 		{
 			name:   "happy path: full idempotency key is present",
@@ -82,7 +82,7 @@ func Test_GetIdempotencyKey(t *testing.T) {
 			key:    "testKey",
 
 			expectedErr: false,
-			expectedIdempotencyKey: &IdempotencyKey{
+			expectedIdempotencyKey: &Key{
 				ID:            738,
 				Key:           "testKey",
 				RequestMethod: http.MethodPost,
@@ -131,13 +131,13 @@ func Test_InsertIdempotencyKey(t *testing.T) {
 	u1 := TestUserID
 	tests := []struct {
 		name   string
-		params IdempotencyKeyParams
+		params KeyParams
 
-		expectedIdempotencyKey *IdempotencyKey
+		expectedIdempotencyKey *Key
 	}{
 		{
 			name: "happy path: insert new idempotency key with valid fields and empty body",
-			params: IdempotencyKeyParams{
+			params: KeyParams{
 				Key:           "awesomeKey",
 				RequestMethod: http.MethodPost,
 				RequestParams: []byte("{}"),
@@ -146,7 +146,7 @@ func Test_InsertIdempotencyKey(t *testing.T) {
 			},
 
 			// We will assume timestamps will work since they are harder to mock but we should find a way.
-			expectedIdempotencyKey: &IdempotencyKey{
+			expectedIdempotencyKey: &Key{
 				ID:            1,
 				Key:           "awesomeKey",
 				RequestMethod: http.MethodPost,
