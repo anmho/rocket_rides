@@ -3,6 +3,7 @@ package idempotency
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -12,7 +13,7 @@ type Key struct {
 	CreatedAt time.Time
 	Key       string
 	LastRunAt time.Time
-	LockedAt  time.Time
+	LockedAt  sql.Null[time.Time]
 	// Request metadata
 	RequestMethod RequestMethod
 	RequestParams []byte
@@ -33,7 +34,16 @@ type KeyParams struct {
 	UserID        int
 }
 
-func GetIdempotencyKey(
+func scanAllKeyFields(row *sql.Row, key *Key) error {
+	return row.Scan(
+		&key.ID, &key.CreatedAt, &key.Key, &key.LastRunAt, &key.LockedAt,
+		&key.RequestMethod, &key.RequestParams, &key.RequestPath,
+		&key.ResponseCode, &key.ResponseBody,
+		&key.RecoveryPoint, &key.UserID,
+	)
+}
+
+func FindKey(
 	ctx context.Context,
 	tx *sql.Tx,
 	userID int,
@@ -56,12 +66,9 @@ func GetIdempotencyKey(
 	defer stmt.Close()
 
 	var iKey Key
-	err = stmt.QueryRowContext(ctx, userID, key).Scan(
-		&iKey.ID, &iKey.CreatedAt, &iKey.Key, &iKey.LastRunAt, &iKey.LockedAt,
-		&iKey.RequestMethod, &iKey.RequestParams, &iKey.RequestPath,
-		&iKey.ResponseCode, &iKey.ResponseBody,
-		&iKey.RecoveryPoint, &iKey.UserID,
-	)
+	row := stmt.QueryRowContext(ctx, userID, key)
+	err = scanAllKeyFields(row, &iKey)
+
 	if err != nil {
 		return nil, fmt.Errorf("querying row: %w", err)
 	}
@@ -69,7 +76,7 @@ func GetIdempotencyKey(
 	return &iKey, nil
 }
 
-func InsertIdempotencyKey(
+func InsertKey(
 	ctx context.Context,
 	tx *sql.Tx,
 	params KeyParams,
@@ -97,30 +104,71 @@ func InsertIdempotencyKey(
 		return nil, fmt.Errorf("preparing statement: %w", err)
 	}
 
-	var key Key
-
 	row := stmt.QueryRow(
 		params.Key,
 		params.RequestMethod,
 		params.RequestParams,
 		params.RequestPath,
-		RecoveryPointStarted,
+		StartedRecoveryPoint,
 		params.UserID,
 	)
-	err = row.Scan(
-		&key.ID, &key.CreatedAt, &key.Key, &key.LastRunAt, &key.LockedAt,
-		&key.RequestMethod, &key.RequestParams, &key.RequestPath,
-		&key.ResponseBody, &key.ResponseCode,
-		&key.RecoveryPoint, &key.UserID,
-	)
+
+	var key Key
+	err = scanAllKeyFields(row, &key)
 	if err != nil {
 		return nil, err
 	}
 	return &key, nil
 }
 
-func UpdateIdempotencyKey(tx *sql.Tx, key *Key) (*Key, error) {
-	return nil, nil
+func UpdateKey(ctx context.Context, tx *sql.Tx, key *Key) (*Key, error) {
+	if key == nil {
+		return nil, errors.New("key must not be nil")
+	}
+	stmt, err := tx.PrepareContext(ctx,
+		`
+		UPDATE idempotency_keys
+		SET 
+			created_at = $2,
+			idempotency_key = $3,
+			last_run_at = $4,
+			locked_at = $5,
+			request_method = $6,
+			request_params = $7,
+			request_path = $8,
+			response_code = $9,
+			response_body = $10,
+			recovery_point = $11,
+			user_id = $12
+		WHERE id = $1
+		RETURNING 
+			id, created_at, idempotency_key, last_run_at, locked_at, 
+			request_method, request_params, request_path,
+			response_code, response_body, 
+			recovery_point, user_id
+		;
+	`)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var updatedKey Key
+	err = stmt.QueryRowContext(ctx,
+		key.ID, key.CreatedAt, key.Key, key.LastRunAt, key.LockedAt,
+		key.RequestMethod, key.RequestParams, key.RequestPath,
+		key.ResponseCode, key.ResponseBody,
+		key.RecoveryPoint, key.UserID).Scan(
+		&updatedKey.ID, &updatedKey.CreatedAt, &updatedKey.Key, &updatedKey.LastRunAt, &updatedKey.LockedAt,
+		&updatedKey.RequestMethod, &updatedKey.RequestParams, &updatedKey.RequestPath,
+		&updatedKey.ResponseCode, &updatedKey.ResponseBody,
+		&updatedKey.RecoveryPoint, &updatedKey.UserID,
+	)
+	//err = scanAllKeyFields(row, &updatedKey)
+	if err != nil {
+		return nil, err
+	}
+	return &updatedKey, nil
 }
 
 func DeleteIdempotencyKey(tx *sql.Tx, key *Key) error {

@@ -9,5 +9,5 @@ func registerRoutes(
 	mux *http.ServeMux,
 	db *sql.DB,
 ) {
-	mux.HandleFunc("POST /charges", handleCharge(db))
+	mux.HandleFunc("POST /rides", HandleRideReservation(db))
 }

@@ -3,12 +3,9 @@ package idempotency
 import (
 	"context"
 	"database/sql"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/anmho/idempotent-rides/testfixtures"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 	"net/http"
 	"testing"
 	"time"
@@ -18,38 +15,64 @@ const (
 	TestUserID = 123
 )
 
-func createPostgres(ctx context.Context, t *testing.T) *postgres.PostgresContainer {
-	pgContainer, err := postgres.Run(ctx,
-		"postgres",
-		postgres.WithDatabase("rocket_rides"),
-		postgres.WithUsername("admin"),
-		postgres.WithPassword("admin"),
-		postgres.WithInitScripts("./sql/1-schema.sql", "./sql/2-data.sql"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(5*time.Second),
-		),
-	)
-	require.NoError(t, err)
-	require.NotNil(t, pgContainer)
-	require.True(t, pgContainer.IsRunning())
-
-	return pgContainer
-}
-
-func shutdownPostgres(ctx context.Context, t *testing.T, pgContainer *postgres.PostgresContainer) {
-	if err := pgContainer.Terminate(ctx); err != nil {
-		t.Fatalf("failed to terminate pgContainer: %s", err)
+var (
+	TestKeyStarted = Key{
+		ID:            736,
+		CreatedAt:     time.Time{},
+		Key:           "testKeyStarted",
+		LastRunAt:     time.Time{},
+		LockedAt:      sql.Null[time.Time]{},
+		RequestMethod: http.MethodPost,
+		RequestParams: []byte("{}"),
+		RequestPath:   "/charges",
+		ResponseCode:  sql.Null[int]{},
+		ResponseBody:  sql.Null[[]byte]{},
+		RecoveryPoint: StartedRecoveryPoint,
+		UserID:        TestUserID,
 	}
-}
-
-func must[T any](t T, err error) T {
-	if err != nil {
-		panic(err)
+	TestKeyRideCreated = Key{
+		ID:            737,
+		CreatedAt:     time.Time{},
+		Key:           "testKeyRideCreated",
+		LastRunAt:     time.Time{},
+		LockedAt:      sql.Null[time.Time]{},
+		RequestMethod: http.MethodPost,
+		RequestParams: []byte("{}"),
+		RequestPath:   "/rides",
+		ResponseCode:  sql.Null[int]{},
+		ResponseBody:  sql.Null[[]byte]{},
+		RecoveryPoint: RideCreatedRecoveryPoint,
+		UserID:        123,
 	}
-	return t
-}
+	TestKeyRideChargeCreated = Key{
+		ID:            737,
+		CreatedAt:     time.Time{},
+		Key:           "testKeyChargeCreated",
+		LastRunAt:     time.Time{},
+		LockedAt:      sql.Null[time.Time]{},
+		RequestMethod: http.MethodPost,
+		RequestParams: []byte("{}"),
+		RequestPath:   "/rides",
+		ResponseCode:  sql.Null[int]{},
+		ResponseBody:  sql.Null[[]byte]{},
+		RecoveryPoint: "charge_created",
+		UserID:        123,
+	}
+	TestKeyFinished = Key{
+		ID:            738,
+		CreatedAt:     time.Time{},
+		Key:           "testKeyFinished",
+		LastRunAt:     time.Time{},
+		LockedAt:      sql.Null[time.Time]{},
+		RequestMethod: http.MethodPost,
+		RequestParams: []byte("{}"),
+		RequestPath:   "/rides",
+		ResponseCode:  sql.Null[int]{V: 201, Valid: true},
+		ResponseBody:  sql.Null[[]byte]{V: []byte("{}"), Valid: true},
+		RecoveryPoint: "finished",
+		UserID:        123,
+	}
+)
 
 func assertEqualIdempotencyKey(t *testing.T, expectedIdempotencyKey, idempotencyKey *Key) {
 	assert.Equal(t, expectedIdempotencyKey.ID, idempotencyKey.ID, "key id")
@@ -60,8 +83,8 @@ func assertEqualIdempotencyKey(t *testing.T, expectedIdempotencyKey, idempotency
 	assert.Equal(t, expectedIdempotencyKey.RequestPath, idempotencyKey.RequestPath, "request path")
 	assert.Equal(t, expectedIdempotencyKey.RequestParams, idempotencyKey.RequestParams, "request params")
 
-	assert.Equal(t, expectedIdempotencyKey.ResponseCode, idempotencyKey.ResponseCode, "response code")
-	assert.Equal(t, expectedIdempotencyKey.ResponseBody, idempotencyKey.ResponseBody, "response body")
+	assert.Equal(t, expectedIdempotencyKey.ResponseCode, idempotencyKey.ResponseCode, "send code")
+	assert.Equal(t, expectedIdempotencyKey.ResponseBody, idempotencyKey.ResponseBody, "send body")
 	assert.Equal(t, expectedIdempotencyKey.RecoveryPoint, idempotencyKey.RecoveryPoint, "recovery point")
 }
 
@@ -79,24 +102,24 @@ func Test_GetIdempotencyKey(t *testing.T) {
 		{
 			name:   "happy path: full idempotency key is present",
 			userID: TestUserID,
-			key:    "testKey",
+			key:    "testKeyFinished",
 
 			expectedErr: false,
 			expectedIdempotencyKey: &Key{
-				ID:            738,
-				Key:           "testKey",
+				ID:            739,
+				Key:           "testKeyFinished",
 				RequestMethod: http.MethodPost,
 				RequestParams: []byte("{}"),
-				RequestPath:   "/charges",
+				RequestPath:   "/rides",
 				ResponseCode: sql.Null[int]{
-					V:     200,
+					V:     201,
 					Valid: true,
 				},
 				ResponseBody: sql.Null[[]byte]{
 					V:     []byte("{}"),
 					Valid: true,
 				},
-				RecoveryPoint: RecoveryPointFinished,
+				RecoveryPoint: FinishedRecoveryPoint,
 				UserID:        TestUserID,
 			},
 		},
@@ -105,16 +128,15 @@ func Test_GetIdempotencyKey(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			pgContainer := createPostgres(ctx, t)
+			db, cleanup := testfixtures.MakePostgres(t)
 			t.Cleanup(func() {
-				shutdownPostgres(ctx, t, pgContainer)
+				cleanup()
 			})
 
-			connString := must(pgContainer.ConnectionString(ctx))
-			db := must(sql.Open("pgx", connString))
-			tx := must(db.BeginTx(ctx, nil))
+			tx, err := db.BeginTx(ctx, nil)
+			require.NoError(t, err)
 
-			idempotencyKey, err := GetIdempotencyKey(ctx, tx, tc.userID, tc.key)
+			idempotencyKey, err := FindKey(ctx, tx, tc.userID, tc.key)
 			if tc.expectedErr {
 				assert.Error(t, err)
 			} else {
@@ -154,7 +176,7 @@ func Test_InsertIdempotencyKey(t *testing.T) {
 				RequestPath:   "/charges",
 				ResponseBody:  sql.Null[[]byte]{},
 				ResponseCode:  sql.Null[int]{},
-				RecoveryPoint: RecoveryPointStarted,
+				RecoveryPoint: StartedRecoveryPoint,
 				UserID:        u1,
 			},
 		},
@@ -162,18 +184,17 @@ func Test_InsertIdempotencyKey(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-			pgContainer := createPostgres(ctx, t)
+			db, cleanup := testfixtures.MakePostgres(t)
 
 			t.Cleanup(func() {
-				shutdownPostgres(ctx, t, pgContainer)
+				cleanup()
 			})
+			ctx := context.Background()
+			tx, err := db.BeginTx(ctx, nil)
+			require.NoError(t, err)
+			require.NotNil(t, tx)
 
-			connStr := must(pgContainer.ConnectionString(ctx, "sslmode=disable"))
-			db := must(sql.Open("pgx", connStr))
-			tx := must(db.BeginTx(ctx, nil))
-
-			idempotencyKey, err := InsertIdempotencyKey(ctx, tx, tc.params)
+			idempotencyKey, err := InsertKey(ctx, tx, tc.params)
 			require.NoError(t, err)
 			require.NoError(t, err)
 			assert.NotNil(t, idempotencyKey, "idempotency not nil")
@@ -183,4 +204,79 @@ func Test_InsertIdempotencyKey(t *testing.T) {
 
 		})
 	}
+}
+
+func Test_UpdateIdempotencyKey(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc string
+		key  *Key
+
+		expectedErr bool
+		expectedKey *Key
+	}{
+		{
+			desc: "happy path: update ride created key that exists in the database to be charge created ",
+			key: &Key{
+				ID:            TestKeyRideCreated.ID,
+				CreatedAt:     TestKeyRideCreated.CreatedAt,
+				Key:           TestKeyRideCreated.Key,
+				LastRunAt:     TestKeyRideCreated.LastRunAt,
+				LockedAt:      TestKeyRideCreated.LockedAt,
+				RequestMethod: TestKeyRideCreated.RequestMethod,
+				RequestParams: TestKeyRideCreated.RequestParams, // update to
+				RequestPath:   TestKeyRideCreated.RequestPath,
+				ResponseCode:  TestKeyRideCreated.ResponseCode,
+				ResponseBody:  TestKeyRideCreated.ResponseBody,
+				RecoveryPoint: ChargeCreatedRecoveryPoint,
+				UserID:        TestKeyRideCreated.UserID,
+			},
+
+			expectedKey: &Key{
+				ID:            TestKeyRideCreated.ID,
+				CreatedAt:     TestKeyRideCreated.CreatedAt,
+				Key:           TestKeyRideCreated.Key,
+				LastRunAt:     TestKeyRideCreated.LastRunAt,
+				LockedAt:      TestKeyRideCreated.LockedAt,
+				RequestMethod: TestKeyRideCreated.RequestMethod,
+				RequestParams: TestKeyRideCreated.RequestParams, // update to
+				RequestPath:   TestKeyRideCreated.RequestPath,
+				ResponseCode:  TestKeyRideCreated.ResponseCode,
+				ResponseBody:  TestKeyRideCreated.ResponseBody,
+				RecoveryPoint: ChargeCreatedRecoveryPoint,
+				UserID:        TestKeyRideCreated.UserID,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			db, cleanup := testfixtures.MakePostgres(t)
+			t.Cleanup(func() {
+				cleanup()
+			})
+
+			ctx := context.Background()
+			tx := must(db.BeginTx(ctx, &sql.TxOptions{
+				Isolation: sql.LevelSerializable,
+				ReadOnly:  false,
+			}))
+
+			updatedKey, err := UpdateKey(ctx, tx, tc.key)
+			require.NotNil(t, updatedKey)
+			require.NoError(t, err)
+
+			assertEqualIdempotencyKey(t, updatedKey, tc.expectedKey)
+		})
+	}
+}
+
+func must[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+
+	return v
+
 }

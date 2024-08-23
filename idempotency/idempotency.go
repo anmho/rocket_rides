@@ -2,20 +2,27 @@ package idempotency
 
 import "net/http"
 
+const (
+	HeaderKey = "Idempotency-Key"
+)
+
 type RecoveryPointEnum string
 
 const (
-	RecoveryPointStarted       RecoveryPointEnum = "started"
-	RecoveryPointRideCreated                     = "ride_created"
-	RecoveryPointChargeStarted                   = "charge_started"
-	RecoveryPointFinished                        = "finished"
+	StartedRecoveryPoint       RecoveryPointEnum = "started"
+	RideCreatedRecoveryPoint                     = "ride_created"
+	ChargeCreatedRecoveryPoint                   = "charge_created"
+	FinishedRecoveryPoint                        = "finished"
 )
 
+func (rp RecoveryPointEnum) String() string {
+	return string(rp)
+}
 func (rp RecoveryPointEnum) IsValid() bool {
 	switch rp {
-	case RecoveryPointStarted, RecoveryPointRideCreated,
-		RecoveryPointChargeStarted,
-		RecoveryPointFinished:
+	case StartedRecoveryPoint, RideCreatedRecoveryPoint,
+		ChargeCreatedRecoveryPoint,
+		FinishedRecoveryPoint:
 		return true
 	default:
 		return false
@@ -39,4 +46,8 @@ func (m RequestMethod) IsValid() bool {
 	default:
 		return false
 	}
+}
+
+func (m RequestMethod) String() string {
+	return string(m)
 }

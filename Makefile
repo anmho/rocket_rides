@@ -12,3 +12,7 @@ run: build
 .PHONY: clean
 clean:
 	@rm ./bin/*
+
+.PHONY: test
+test:
+	@go test ./...
