@@ -52,6 +52,7 @@ func AssertEqualRide(t *testing.T, expected, ride *Ride) {
 }
 
 func TestRideService_GetRide(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc   string
 		rideID int
@@ -103,6 +104,7 @@ func TestRideService_GetRide(t *testing.T) {
 }
 
 func TestRideService_CreateRide(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc string
 		ride *Ride
@@ -150,6 +152,7 @@ func TestRideService_CreateRide(t *testing.T) {
 }
 
 func TestRideService_UpdateRide(t *testing.T) {
+	t.Parallel()
 	updatedRide := &Ride{
 		ID:               TestExistingRide.ID,
 		IdempotencyKeyID: TestExistingRide.IdempotencyKeyID,
@@ -217,5 +220,44 @@ func TestRideService_UpdateRide(t *testing.T) {
 }
 
 func TestRideService_DeleteRide(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		desc   string
+		rideID int
 
+		expectedErr         bool
+		expectedAffectedRow bool
+	}{
+		{
+			desc:                "happy path: delete ride that exists",
+			rideID:              TestExistingRide.ID,
+			expectedAffectedRow: true,
+		},
+		{
+			desc:                "error path: delete ride that does not exist. no error but should not return ok",
+			rideID:              999,
+			expectedAffectedRow: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			rideService := MakeService()
+			ctx := context.Background()
+
+			db, cleanup := testfixtures.MakePostgres(t)
+			t.Cleanup(func() {
+				cleanup()
+			})
+			tx := testfixtures.MakeTx(t, ctx, db)
+			affectedRow, err := rideService.DeleteRide(ctx, tx, tc.rideID)
+			if tc.expectedErr {
+				assert.Error(t, err)
+				assert.False(t, affectedRow)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, affectedRow, tc.expectedAffectedRow)
+			}
+		})
+	}
 }
