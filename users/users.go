@@ -12,11 +12,3 @@ func GetPtr[T any](t T) *T {
 
 type User struct {
 }
-
-func GetUser() {
-
-}
-
-func InsertUser() {
-
-}
