@@ -52,3 +52,16 @@ INSERT INTO idempotency_keys (
     'finished', 123
 );
 
+
+-- Rides. New ride where the charge hasn't been created yet
+INSERT INTO rides (
+    id, idempotency_key_id,
+    origin_lat, origin_lon,
+    target_lat, target_lon,
+    user_id
+) VALUES (
+    1337, 738,
+    1, 2,
+    3, 4,
+    123
+ );

@@ -85,7 +85,7 @@ CREATE TABLE audit_records (
 --
 
 CREATE TABLE rides (
-    id BIGSERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY CHECK (id > 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     -- Store a reference to the idempotency key so that we can recover an

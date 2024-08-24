@@ -2,6 +2,7 @@ package rides
 
 import (
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -29,6 +30,26 @@ type Ride struct {
 	UserID         int
 }
 
-func New() *Ride {
-	return &Ride{}
+func New(keyID int, target, origin Coordinate) (*Ride, error) {
+	// do ride validation here
+	if !target.IsValid() {
+		return nil, errors.New("invalid target")
+	}
+
+	if !origin.IsValid() {
+		return nil, errors.New("invalid target")
+	}
+
+	return &Ride{
+		ID:        -1,
+		CreatedAt: time.Now(),
+		IdempotencyKeyID: sql.Null[int]{
+			V:     keyID,
+			Valid: true,
+		},
+		Origin:         origin,
+		Target:         target,
+		StripeChargeID: sql.Null[string]{},
+		UserID:         0,
+	}, nil
 }
