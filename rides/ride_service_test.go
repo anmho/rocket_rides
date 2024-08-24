@@ -88,7 +88,7 @@ func TestRideService_GetRide(t *testing.T) {
 			if err != nil {
 				return
 			}
-			rideService := NewService()
+			rideService := MakeService()
 			ride, err := rideService.GetRide(ctx, tx, tc.rideID)
 
 			if tc.expectedErr {
@@ -134,7 +134,7 @@ func TestRideService_CreateRide(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, tx)
 
-			rideService := NewService()
+			rideService := MakeService()
 
 			newRide, err := rideService.CreateRide(ctx, tx, tc.ride)
 			if tc.expectedErr {
@@ -150,7 +150,70 @@ func TestRideService_CreateRide(t *testing.T) {
 }
 
 func TestRideService_UpdateRide(t *testing.T) {
+	updatedRide := &Ride{
+		ID:               TestExistingRide.ID,
+		IdempotencyKeyID: TestExistingRide.IdempotencyKeyID,
+		Origin:           TestExistingRide.Origin,
+		Target: Coordinate{
+			Lat:  TestExistingRide.Target.Long + 10.0,
+			Long: TestExistingRide.Target.Long + 10.0,
+		},
+		StripeChargeID: sql.Null[string]{},
+		UserID:         TestExistingRide.UserID,
+	}
+	tests := []struct {
+		desc string
+		ride *Ride
 
+		expectedErr  bool
+		expectedRide *Ride
+	}{
+		{
+			desc: "happy path: update an existing ride. change the target",
+			ride: updatedRide,
+
+			expectedRide: updatedRide,
+		},
+		{
+			desc: "error path: update a non-existent ride. ride id does not exist",
+			ride: &Ride{
+				ID:               5823,
+				IdempotencyKeyID: TestExistingRide.IdempotencyKeyID,
+				Origin:           TestExistingRide.Origin,
+				Target: Coordinate{
+					Lat:  TestExistingRide.Target.Long + 10.0,
+					Long: TestExistingRide.Target.Long + 10.0,
+				},
+				StripeChargeID: sql.Null[string]{},
+				UserID:         TestExistingRide.UserID,
+			},
+
+			expectedErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			db, cleanup := testfixtures.MakePostgres(t)
+			ctx := context.Background()
+			t.Cleanup(func() {
+				cleanup()
+			})
+			tx := testfixtures.MakeTx(t, ctx, db)
+
+			rideService := MakeService()
+
+			updatedRide, err := rideService.UpdateRide(ctx, tx, tc.ride)
+			if tc.expectedErr {
+				assert.Error(t, err)
+				assert.Nil(t, updatedRide)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, updatedRide)
+				AssertEqualRide(t, tc.expectedRide, updatedRide)
+			}
+		})
+	}
 }
 
 func TestRideService_DeleteRide(t *testing.T) {

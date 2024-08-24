@@ -12,6 +12,17 @@ import (
 	"time"
 )
 
+func MakeTx(t *testing.T, ctx context.Context, db *sql.DB) *sql.Tx {
+	require.NotNil(t, db)
+
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, tx)
+	return tx
+}
+
 // MakePostgres returns server dependencies and a cleanup function for tests.
 func MakePostgres(t *testing.T) (*sql.DB, func()) {
 	ctx := context.Background()

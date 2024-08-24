@@ -15,7 +15,7 @@ type Service interface {
 type service struct {
 }
 
-func NewService() Service {
+func MakeService() Service {
 	return &service{}
 }
 
@@ -145,7 +145,6 @@ func (rs *service) UpdateRide(ctx context.Context, tx *sql.Tx, ride *Ride) (*Rid
 	return &updatedRide, nil
 }
 func (rs *service) DeleteRide(ctx context.Context, tx *sql.Tx, rideID int) (bool, error) {
-
 	stmt, err := tx.PrepareContext(ctx,
 		`
 	DELETE FROM rocket_rides.public.rides
