@@ -56,7 +56,7 @@ func TestServer_handleRideReservation(t *testing.T) {
 			idempotencyKey: newIdempotencyKey,
 			method:         http.MethodPost,
 			params: RideReservationParams{
-				UserID: users.TestUserID,
+				UserID: users.TestUser1ID,
 				Origin: rides.Coordinate{},
 				Target: rides.Coordinate{},
 			},
@@ -67,7 +67,7 @@ func TestServer_handleRideReservation(t *testing.T) {
 			idempotencyKey: dbIdempotencyKey,
 			method:         http.MethodPost,
 			params: RideReservationParams{
-				UserID: users.TestUserID,
+				UserID: users.TestUser1ID,
 				Origin: rides.Coordinate{},
 				Target: rides.Coordinate{},
 			},

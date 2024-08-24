@@ -6,6 +6,12 @@ INSERT INTO users (
     123, 'awesome-user@email.com', 'sk_123'
 );
 
+INSERT INTO users (
+    id, email, stripe_customer_id
+) VALUES (
+    456, 'cool-user@email.com', 'sk_456'
+);
+
 -- Started request
 INSERT INTO idempotency_keys (
     id, idempotency_key,
@@ -53,7 +59,7 @@ INSERT INTO idempotency_keys (
 );
 
 
--- Rides. New ride where the charge hasn't been created yet
+-- Ride where the charge hasn't been created yet
 INSERT INTO rides (
     id, idempotency_key_id,
     origin_lat, origin_lon,
@@ -65,3 +71,18 @@ INSERT INTO rides (
     3, 4,
     123
  );
+
+-- Ride where the charge has been created.
+INSERT INTO rides (
+    id, idempotency_key_id,
+    origin_lat, origin_lon,
+    target_lat, target_lon,
+    stripe_charge_id,
+    user_id
+) VALUES (
+    1442, 738,
+    72, 72,
+    72, 72,
+    'ch_456',
+    456
+);

@@ -62,7 +62,7 @@ func (rs *service) CreateRide(ctx context.Context, tx *sql.Tx, ride *Ride) (*Rid
 		$1, 
 		$2, $3, 
 		$4, $5,
-		$6, $6
+		$6, $7
 	)
 	RETURNING 
 	    id, created_at, idempotency_key_id, 

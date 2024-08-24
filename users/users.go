@@ -1,7 +1,8 @@
 package users
 
 var (
-	TestUserID    = GetPtr(123)
+	TestUser1ID   = GetPtr(123)
+	TestUser2ID   = GetPtr(456)
 	TestUserEmail = "awesome-user@email.com"
 )
 
