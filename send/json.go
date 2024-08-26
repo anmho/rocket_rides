@@ -6,16 +6,10 @@ import (
 	"net/http"
 )
 
-func WriteJSON[T any](w http.ResponseWriter, status int, data T) {
+func WriteJSON[T any](w http.ResponseWriter, status int, data T) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(status); err != nil {
-		Error(w, HTTPError{
-			Cause:   err,
-			Message: "internal server error",
-			Status:  http.StatusInternalServerError,
-		})
-	}
+	return json.NewEncoder(w).Encode(data)
 }
 
 func Read[T any](r *http.Request) (T, error) {

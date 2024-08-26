@@ -1,4 +1,4 @@
-package testfixtures
+package test
 
 import (
 	"context"
@@ -24,7 +24,7 @@ func MakeTx(t *testing.T, ctx context.Context, db *sql.DB) *sql.Tx {
 }
 
 // MakePostgres returns server dependencies and a cleanup function for tests.
-func MakePostgres(t *testing.T) (*sql.DB, func()) {
+func MakePostgres(t *testing.T) *sql.DB {
 	ctx := context.Background()
 	pgContainer := createPostgres(ctx, t)
 
@@ -35,9 +35,11 @@ func MakePostgres(t *testing.T) (*sql.DB, func()) {
 	require.NoError(t, err)
 	require.NotNil(t, db)
 
-	return db, func() {
+	t.Cleanup(func() {
 		shutdownPostgres(ctx, t, pgContainer)
-	}
+	})
+
+	return db
 }
 
 func createPostgres(ctx context.Context, t *testing.T) *postgres.PostgresContainer {

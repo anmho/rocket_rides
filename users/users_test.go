@@ -2,7 +2,7 @@ package users
 
 import (
 	"context"
-	"github.com/anmho/idempotent-rides/testfixtures"
+	"github.com/anmho/idempotent-rides/test"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -38,14 +38,9 @@ func TestService_GetUser(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			db, cleanup := testfixtures.MakePostgres(t)
-
-			t.Cleanup(func() {
-				cleanup()
-			})
-
+			db := test.MakePostgres(t)
 			ctx := context.Background()
-			tx := testfixtures.MakeTx(t, ctx, db)
+			tx := test.MakeTx(t, ctx, db)
 
 			userService := MakeService()
 			user, err := userService.GetUser(ctx, tx, tc.userID)
@@ -76,13 +71,10 @@ func TestService_CreateUser(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			db, cleanup := testfixtures.MakePostgres(t)
-			t.Cleanup(func() {
-				cleanup()
-			})
+			db := test.MakePostgres(t)
 
 			ctx := context.Background()
-			tx := testfixtures.MakeTx(t, ctx, db)
+			tx := test.MakeTx(t, ctx, db)
 
 			userService := MakeService()
 			user, err := userService.CreateUser(ctx, tx, tc.user)
@@ -132,14 +124,12 @@ func TestService_UpdateUser(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			db, cleanup := testfixtures.MakePostgres(t)
-			t.Cleanup(func() {
-				cleanup()
-			})
+			db := test.MakePostgres(t)
+
 			ctx := context.Background()
 
-			tx := testfixtures.MakeTx(t, ctx, db)
-			testfixtures.MakeTx(t, ctx, db)
+			tx := test.MakeTx(t, ctx, db)
+			test.MakeTx(t, ctx, db)
 
 			userService := MakeService()
 			user, err := userService.UpdateUser(ctx, tx, tc.user)
@@ -180,15 +170,13 @@ func TestService_DeleteUser(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			db, cleanup := testfixtures.MakePostgres(t)
+			db := test.MakePostgres(t)
 
 			ctx := context.Background()
-			t.Cleanup(func() {
-				cleanup()
-			})
+
 			userService := MakeService()
 
-			tx := testfixtures.MakeTx(t, ctx, db)
+			tx := test.MakeTx(t, ctx, db)
 			affectedRow, err := userService.DeleteUser(ctx, tx, tc.userID)
 			if tc.expectedAffectedRow {
 				assert.Error(t, err)

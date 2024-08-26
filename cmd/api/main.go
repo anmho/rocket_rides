@@ -34,7 +34,7 @@ func MakeConnString(
 
 func main() {
 	db, err := sql.Open("pgx", dbURL)
-	mux := api.NewServer(db)
+	mux := api.MakeServer(db)
 
 	srv := http.Server{
 		Addr:    fmt.Sprintf(":%d", port),

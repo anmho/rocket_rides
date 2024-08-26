@@ -86,3 +86,15 @@ INSERT INTO rides (
     'ch_456',
     456
 );
+
+-- Test Audit Record
+INSERT INTO audit_records (
+    id, action, data, origin_ip,
+    resource_id, resource_type,
+    user_id
+) VALUES (
+    4321, 'created', '{}', '127.0.0.1',
+    1441, 'ride',
+    123
+)
+;

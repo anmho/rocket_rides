@@ -3,7 +3,7 @@ package rides
 import (
 	"context"
 	"database/sql"
-	"github.com/anmho/idempotent-rides/testfixtures"
+	"github.com/anmho/idempotent-rides/test"
 	"github.com/anmho/idempotent-rides/users"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -78,10 +78,8 @@ func TestRideService_GetRide(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			ctx := context.Background()
-			db, cleanup := testfixtures.MakePostgres(t)
-			t.Cleanup(func() {
-				cleanup()
-			})
+			db := test.MakePostgres(t)
+
 			tx, err := db.BeginTx(ctx, &sql.TxOptions{
 				Isolation: sql.LevelSerializable,
 				ReadOnly:  false,
@@ -122,11 +120,7 @@ func TestRideService_CreateRide(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			db, cleanup := testfixtures.MakePostgres(t)
-
-			t.Cleanup(func() {
-				cleanup()
-			})
+			db := test.MakePostgres(t)
 
 			ctx := context.Background()
 			tx, err := db.BeginTx(ctx, &sql.TxOptions{
@@ -197,12 +191,10 @@ func TestRideService_UpdateRide(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			db, cleanup := testfixtures.MakePostgres(t)
+			db := test.MakePostgres(t)
 			ctx := context.Background()
-			t.Cleanup(func() {
-				cleanup()
-			})
-			tx := testfixtures.MakeTx(t, ctx, db)
+
+			tx := test.MakeTx(t, ctx, db)
 
 			rideService := MakeService()
 
@@ -245,11 +237,9 @@ func TestRideService_DeleteRide(t *testing.T) {
 			rideService := MakeService()
 			ctx := context.Background()
 
-			db, cleanup := testfixtures.MakePostgres(t)
-			t.Cleanup(func() {
-				cleanup()
-			})
-			tx := testfixtures.MakeTx(t, ctx, db)
+			db := test.MakePostgres(t)
+
+			tx := test.MakeTx(t, ctx, db)
 			affectedRow, err := rideService.DeleteRide(ctx, tx, tc.rideID)
 			if tc.expectedErr {
 				assert.Error(t, err)

@@ -17,6 +17,8 @@ type AtomicPhaseResult interface {
 
 var _ AtomicPhaseResult = (*NoOpResult)(nil)
 
+// TODO Update these models to return the relevant data from the previous phase
+
 type NoOpResult struct{}
 
 func (r *NoOpResult) UpdateKeyForNextPhase(ctx context.Context, tx *sql.Tx, key *Key) (*Key, error) {
@@ -24,6 +26,8 @@ func (r *NoOpResult) UpdateKeyForNextPhase(ctx context.Context, tx *sql.Tx, key 
 }
 
 var _ AtomicPhaseResult = (*RecoveryPointResult)(nil)
+
+// TODO Update these models to return the relevant data from the previous phase
 
 // RecoveryPointResult represents an action to set a new recovery point. One possible option for a
 // return from a #atomic_phase block.
@@ -50,6 +54,8 @@ func (r *RecoveryPointResult) UpdateKeyForNextPhase(ctx context.Context, tx *sql
 }
 
 var _ AtomicPhaseResult = (*ResponseResult)(nil)
+
+// TODO Update these models to return the relevant data from the previous phase
 
 type ResponseResult struct {
 	Status int

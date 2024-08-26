@@ -3,7 +3,7 @@ package idempotency
 import (
 	"context"
 	"database/sql"
-	"github.com/anmho/idempotent-rides/testfixtures"
+	"github.com/anmho/idempotent-rides/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"net/http"
@@ -128,10 +128,7 @@ func Test_GetIdempotencyKey(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			db, cleanup := testfixtures.MakePostgres(t)
-			t.Cleanup(func() {
-				cleanup()
-			})
+			db := test.MakePostgres(t)
 
 			tx, err := db.BeginTx(ctx, nil)
 			require.NoError(t, err)
@@ -184,11 +181,8 @@ func Test_InsertIdempotencyKey(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			db, cleanup := testfixtures.MakePostgres(t)
+			db := test.MakePostgres(t)
 
-			t.Cleanup(func() {
-				cleanup()
-			})
 			ctx := context.Background()
 			tx, err := db.BeginTx(ctx, nil)
 			require.NoError(t, err)
@@ -252,10 +246,7 @@ func Test_UpdateIdempotencyKey(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			db, cleanup := testfixtures.MakePostgres(t)
-			t.Cleanup(func() {
-				cleanup()
-			})
+			db := test.MakePostgres(t)
 
 			ctx := context.Background()
 			tx := must(db.BeginTx(ctx, &sql.TxOptions{

@@ -15,7 +15,7 @@ func Test_AtomicPhase(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			//db, cleanup := testfixtures.MakePostgres(t)
+			//db, cleanup := test.MakePostgres(t)
 			//t.Cleanup(func() { cleanup() })
 			//key, err := AtomicPhase(ctx, nil, db)
 			//require.NoError(t)

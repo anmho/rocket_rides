@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/anmho/idempotent-rides/idempotency"
 	"github.com/anmho/idempotent-rides/rides"
-	"github.com/anmho/idempotent-rides/testfixtures"
+	"github.com/anmho/idempotent-rides/test"
 	"github.com/anmho/idempotent-rides/users"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,12 +77,9 @@ func TestServer_handleRideReservation(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			db, cleanup := testfixtures.MakePostgres(t)
-			t.Cleanup(func() {
-				cleanup()
-			})
+			db := test.MakePostgres(t)
 
-			rocketRides := NewServer(db)
+			rocketRides := MakeServer(db)
 			srv := httptest.NewServer(rocketRides)
 			t.Cleanup(func() {
 				srv.Close()

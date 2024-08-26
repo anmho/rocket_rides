@@ -152,6 +152,7 @@ func UpdateKey(ctx context.Context, tx *sql.Tx, key *Key) (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 
 	var updatedKey Key
 	err = stmt.QueryRowContext(ctx,

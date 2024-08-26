@@ -5,22 +5,47 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/anmho/idempotent-rides/audit"
 	"github.com/anmho/idempotent-rides/idempotency"
 	"github.com/anmho/idempotent-rides/rides"
 	"github.com/anmho/idempotent-rides/scope"
 	"github.com/anmho/idempotent-rides/send"
+	"github.com/anmho/idempotent-rides/users"
 	"log"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
-func NewServer(db *sql.DB) http.Handler {
+func MakeServer(db *sql.DB) http.Handler {
 	mux := http.NewServeMux()
-	registerRoutes(mux, db)
+	rideService := rides.MakeService()
+	auditService := audit.MakeService()
+	userService := users.MakeService()
 
 	// register middlewares
+	registerRoutes(mux, db, rideService, auditService, userService)
 
 	return mux
+}
+
+func handleError(w http.ResponseWriter, err error) {
+	if errors.Is(err, &send.HTTPError{}) {
+		send.Error(w, err.(send.HTTPError))
+	} else {
+		send.Error(w, send.NewErrInternal(err))
+	}
+}
+
+type RouteHandler = func(w http.ResponseWriter, r *http.Request) error
+
+func MakeHandlerFunc(f RouteHandler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := f(w, r)
+		if err != nil {
+			handleError(w, err)
+		}
+	}
 }
 
 const (
@@ -42,35 +67,32 @@ func validateReservationParams(params RideReservationParams) bool {
 	return params.UserID != nil && params.Origin.IsValid() && params.Target.IsValid()
 }
 
-func HandleRideReservation(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func handleRideReservation(db *sql.DB, rideService rides.Service, auditService audit.Service, userService users.Service) RouteHandler {
+	return func(w http.ResponseWriter, r *http.Request) error {
 		ctx := r.Context()
 
 		keyVal := r.Header.Get(idempotency.HeaderKey)
-		scope.GetLogger().Info("HandleRideReservation", slog.String("keyVal", keyVal))
+		scope.GetLogger().Info("handleRideReservation", slog.String("keyVal", keyVal))
 		if !validateIdempotencyKey(keyVal) {
-			send.Error(w, send.HTTPError{
+			return send.HTTPError{
 				Message: "idempotency key required",
 				Status:  http.StatusBadRequest,
-			})
-			return
+			}
 		}
 		params, err := send.Read[RideReservationParams](r)
 		if err != nil {
-			send.Error(w, send.HTTPError{
+			return send.HTTPError{
 				Cause:   err,
 				Message: "bad request",
 				Status:  http.StatusBadRequest,
-			})
-			return
+			}
 		}
-		// TODO: add actual validation logic
+
 		if !validateReservationParams(params) {
-			send.Error(w, send.HTTPError{
+			return send.HTTPError{
 				Message: "invalid request params",
 				Status:  http.StatusBadRequest,
-			})
-			return
+			}
 		}
 
 		// if there's an idempotency key we should retrieve it and check the status.
@@ -105,7 +127,6 @@ func HandleRideReservation(db *sql.DB) http.HandlerFunc {
 				if err != nil {
 					return nil, fmt.Errorf("failed to add new key: %w", err)
 				}
-				scope.GetLogger().Error("1 key should not be nil at this point", slog.Any("key", key), slog.Any("newKey", newKey))
 				key = newKey
 
 				result := idempotency.NewRecoveryPointResult(idempotency.StartedRecoveryPoint)
@@ -113,21 +134,17 @@ func HandleRideReservation(db *sql.DB) http.HandlerFunc {
 			},
 		)
 		if err != nil {
-			send.Error(w, send.NewErrInternal(fmt.Errorf("failed to upsert idempotency key: %w", err)))
-			return
+			return fmt.Errorf("failed to upsert idempotency key: %w", err)
 		}
 
-		//key = updatedKey
-		scope.GetLogger().Error("2 key should not be nil at this point", slog.Any("key", key))
-
-		var ride rides.Ride
-		_ = ride
+		var ride *rides.Ride
 		var updatedKey *idempotency.Key
-		_ = updatedKey
 
 		// Once we have the key, we'll continue the work and verify it is not completed.
-
 		for {
+			if key == nil {
+				return errors.New("nil key when executing phases")
+			}
 			scope.GetLogger().Error("hello", slog.Any("key stage", key))
 			switch key.RecoveryPoint {
 			case idempotency.StartedRecoveryPoint:
@@ -135,8 +152,35 @@ func HandleRideReservation(db *sql.DB) http.HandlerFunc {
 					func(tx *sql.Tx) (idempotency.AtomicPhaseResult, error) {
 						// Checkpoint 2: ride_created
 						//	Create ride
+						ride, err = rides.New(key.ID, params.Origin, params.Origin)
+						if err != nil {
+							return nil, send.HTTPError{
+								Cause:   nil,
+								Message: "bad request for ride",
+								Status:  http.StatusBadRequest,
+							}
+						}
+
 						//	Create ride audit record
 						log.Println("StartedRecoveryPoint")
+
+						data, err := json.Marshal(params)
+						if err != nil {
+							return nil, send.HTTPError{
+								Cause:   fmt.Errorf("marshalling params: %w - %+v", err, params),
+								Message: "marshaling params",
+								Status:  http.StatusInternalServerError,
+							}
+						}
+
+						record := audit.NewRecord("create_ride", data, r.RemoteAddr, audit.Resource{
+							ID:   ride.ID,
+							Type: "ride",
+						}, *params.UserID)
+						record, err = auditService.CreateRecord(ctx, tx, record)
+						if err != nil {
+							return nil, err
+						}
 
 						return idempotency.NewRecoveryPointResult(idempotency.RideCreatedRecoveryPoint), nil
 					},
@@ -144,7 +188,31 @@ func HandleRideReservation(db *sql.DB) http.HandlerFunc {
 			case idempotency.RideCreatedRecoveryPoint:
 				updatedKey, err = idempotency.AtomicPhase(ctx, key, db,
 					func(tx *sql.Tx) (idempotency.AtomicPhaseResult, error) {
-						// Checkpoint 3: Create ride audit record
+						// Checkpoint 3:
+						//	Create ride audit record
+						bytes, err := json.Marshal(params)
+						if err != nil {
+							return nil, fmt.Errorf("creating audit record: %w", err)
+						}
+						record, err := auditService.CreateRecord(ctx, tx, &audit.Record{
+							Action:    "created",
+							CreatedAt: time.Now(),
+							Data:      bytes,
+							OriginIP:  r.RemoteAddr,
+							Resource: audit.Resource{
+								ID:   ride.ID,
+								Type: "ride",
+							},
+							UserID: userID,
+						})
+
+						if err != nil {
+							return nil, err
+						}
+						scope.GetLogger().Info(
+							"record created",
+							slog.Any("record", record))
+
 						// 	Charge user via Stripe
 						//	Update ride
 						scope.GetLogger().Info("RideCreatedRecoveryPoint")
@@ -164,22 +232,17 @@ func HandleRideReservation(db *sql.DB) http.HandlerFunc {
 			case idempotency.FinishedRecoveryPoint:
 				goto loop
 			default:
-				send.Error(w, send.NewErrInternal(errors.New("unknown recovery point"+key.RecoveryPoint.String())))
-				return
-
+				return errors.New("unknown recovery point" + key.RecoveryPoint.String())
 			}
 
-			//scope.GetLogger().Error("rest of phases", slog.Any("updatedKey", updatedKey), slog.Any("error", err))
+			// should switch right here
 			if err != nil {
-				send.Error(w, send.NewErrInternal(err))
-				return
+				return err
 			}
 			key = updatedKey
 		}
 	loop:
-
-		scope.GetLogger().Error("end loop", slog.Any("key", key))
-		w.WriteHeader(key.ResponseCode.V)
-		w.Write(key.ResponseBody.V)
+		send.WriteJSON(w, key.ResponseCode.V, key.ResponseBody.V)
+		return nil
 	}
 }

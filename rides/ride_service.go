@@ -35,6 +35,7 @@ func (rs *service) GetRide(ctx context.Context, tx *sql.Tx, rideID int) (*Ride, 
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 
 	var ride Ride
 	err = stmt.QueryRowContext(ctx, rideID).Scan(
@@ -119,6 +120,7 @@ func (rs *service) UpdateRide(ctx context.Context, tx *sql.Tx, ride *Ride) (*Rid
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 
 	var updatedRide Ride
 	err = stmt.QueryRowContext(ctx,
@@ -150,10 +152,10 @@ func (rs *service) DeleteRide(ctx context.Context, tx *sql.Tx, rideID int) (bool
 	DELETE FROM rocket_rides.public.rides
 	WHERE id = $1
 	`)
-
 	if err != nil {
 		return false, err
 	}
+	defer stmt.Close()
 
 	result, err := stmt.Exec(rideID)
 	if err != nil {

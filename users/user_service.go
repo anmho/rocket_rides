@@ -41,7 +41,7 @@ func (s *service) GetUser(ctx context.Context, tx *sql.Tx, userID int) (*User, e
 	var user User
 	err := row.Scan(&user.ID, &user.Email, &user.StripeCustomerID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errors.New("user not found")
 		}
 		return nil, err
@@ -81,6 +81,7 @@ func (s *service) UpdateUser(ctx context.Context, tx *sql.Tx, user *User) (*User
 	if err != nil {
 		return nil, err
 	}
+
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return nil, err
