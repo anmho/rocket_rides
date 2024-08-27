@@ -2,7 +2,7 @@ package audit_test
 
 import (
 	"context"
-	audit "github.com/anmho/idempotent-rides/audit_test"
+	audit "github.com/anmho/idempotent-rides/audit"
 	"github.com/anmho/idempotent-rides/test"
 	"github.com/stretchr/testify/assert"
 	"testing"

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	audit "github.com/anmho/idempotent-rides/audit_test"
+	audit "github.com/anmho/idempotent-rides/audit"
 	"github.com/anmho/idempotent-rides/idempotency"
 	"github.com/anmho/idempotent-rides/rides"
 	"github.com/anmho/idempotent-rides/scope"

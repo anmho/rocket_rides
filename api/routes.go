@@ -2,7 +2,7 @@ package api
 
 import (
 	"database/sql"
-	audit "github.com/anmho/idempotent-rides/audit_test"
+	audit "github.com/anmho/idempotent-rides/audit"
 	"github.com/anmho/idempotent-rides/rides"
 	"github.com/anmho/idempotent-rides/users"
 	"net/http"
