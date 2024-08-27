@@ -12,6 +12,13 @@ INSERT INTO users (
     456, 'cool-user@email.com', 'sk_456'
 );
 
+INSERT INTO users (
+    id, email, stripe_customer_id
+) VALUES (
+    1337, 'jgoon@uiuc.edu', 'cus_Qjlq6Bl2Bb2nTq'
+);
+
+
 -- Started request
 INSERT INTO idempotency_keys (
     id, idempotency_key,

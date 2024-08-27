@@ -5,16 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	database "github.com/anmho/idempotent-rides/sql"
 )
 
-type User struct {
-	ID               int
-	Email            string
-	StripeCustomerID string
-}
-
 type Service interface {
-	GetUser(ctx context.Context, tx *sql.Tx, userID int) (*User, error)
+	GetUser(ctx context.Context, db database.DB, userID int) (*User, error)
 	CreateUser(ctx context.Context, tx *sql.Tx, user *User) (*User, error)
 	UpdateUser(ctx context.Context, tx *sql.Tx, user *User) (*User, error)
 	DeleteUser(ctx context.Context, tx *sql.Tx, userID int) (bool, error)
@@ -27,7 +22,7 @@ func MakeService() Service {
 	return &service{}
 }
 
-func (s *service) GetUser(ctx context.Context, tx *sql.Tx, userID int) (*User, error) {
+func (s *service) GetUser(ctx context.Context, db database.DB, userID int) (*User, error) {
 	query := `
 	SELECT 
 	    id, email, stripe_customer_id 
@@ -36,7 +31,7 @@ func (s *service) GetUser(ctx context.Context, tx *sql.Tx, userID int) (*User, e
 	;
 	`
 
-	row := tx.QueryRowContext(ctx, query, userID)
+	row := db.QueryRowContext(ctx, query, userID)
 
 	var user User
 	err := row.Scan(&user.ID, &user.Email, &user.StripeCustomerID)

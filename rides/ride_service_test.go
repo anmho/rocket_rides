@@ -1,8 +1,9 @@
-package rides
+package rides_test
 
 import (
 	"context"
 	"database/sql"
+	"github.com/anmho/idempotent-rides/rides"
 	"github.com/anmho/idempotent-rides/test"
 	"github.com/anmho/idempotent-rides/users"
 	"github.com/stretchr/testify/assert"
@@ -11,31 +12,31 @@ import (
 )
 
 var (
-	TestExistingRide = &Ride{
+	TestExistingRide = &rides.Ride{
 		ID: 1337,
 		IdempotencyKeyID: sql.Null[int]{
 			V:     738,
 			Valid: true,
 		},
-		Origin: Coordinate{
+		Origin: rides.Coordinate{
 			Lat:  1,
 			Long: 2,
 		},
-		Target: Coordinate{
+		Target: rides.Coordinate{
 			Lat:  3,
 			Long: 4,
 		},
 		StripeChargeID: sql.Null[string]{},
 		UserID:         *users.TestUser1ID,
 	}
-	TestNewRide = &Ride{
+	TestNewRide = &rides.Ride{
 		ID:               1442,
 		IdempotencyKeyID: sql.Null[int]{},
-		Origin: Coordinate{
+		Origin: rides.Coordinate{
 			Lat:  72,
 			Long: 72,
 		},
-		Target: Coordinate{
+		Target: rides.Coordinate{
 			Lat:  72,
 			Long: 72,
 		},
@@ -44,7 +45,7 @@ var (
 	}
 )
 
-func AssertEqualRide(t *testing.T, expected, ride *Ride) {
+func AssertEqualRide(t *testing.T, expected, ride *rides.Ride) {
 	assert.Equal(t, expected.UserID, ride.UserID)
 	assert.Equal(t, expected.StripeChargeID, ride.StripeChargeID)
 	assert.Equal(t, expected.Origin, ride.Origin)
@@ -57,7 +58,7 @@ func TestRideService_GetRide(t *testing.T) {
 		desc   string
 		rideID int
 
-		expectedRide *Ride
+		expectedRide *rides.Ride
 		expectedErr  bool
 	}{
 		{
@@ -87,7 +88,7 @@ func TestRideService_GetRide(t *testing.T) {
 			if err != nil {
 				return
 			}
-			rideService := MakeService()
+			rideService := rides.MakeService()
 			ride, err := rideService.GetRide(ctx, tx, tc.rideID)
 
 			if tc.expectedErr {
@@ -105,10 +106,10 @@ func TestRideService_CreateRide(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		desc string
-		ride *Ride
+		ride *rides.Ride
 
 		expectedErr  bool
-		expectedRide *Ride
+		expectedRide *rides.Ride
 	}{
 		{
 			desc:         "happy path: create new ride",
@@ -130,7 +131,7 @@ func TestRideService_CreateRide(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, tx)
 
-			rideService := MakeService()
+			rideService := rides.MakeService()
 
 			newRide, err := rideService.CreateRide(ctx, tx, tc.ride)
 			if tc.expectedErr {
@@ -147,11 +148,11 @@ func TestRideService_CreateRide(t *testing.T) {
 
 func TestRideService_UpdateRide(t *testing.T) {
 	t.Parallel()
-	updatedRide := &Ride{
+	updatedRide := &rides.Ride{
 		ID:               TestExistingRide.ID,
 		IdempotencyKeyID: TestExistingRide.IdempotencyKeyID,
 		Origin:           TestExistingRide.Origin,
-		Target: Coordinate{
+		Target: rides.Coordinate{
 			Lat:  TestExistingRide.Target.Long + 10.0,
 			Long: TestExistingRide.Target.Long + 10.0,
 		},
@@ -160,10 +161,10 @@ func TestRideService_UpdateRide(t *testing.T) {
 	}
 	tests := []struct {
 		desc string
-		ride *Ride
+		ride *rides.Ride
 
 		expectedErr  bool
-		expectedRide *Ride
+		expectedRide *rides.Ride
 	}{
 		{
 			desc: "happy path: update an existing ride. change the target",
@@ -173,11 +174,11 @@ func TestRideService_UpdateRide(t *testing.T) {
 		},
 		{
 			desc: "error path: update a non-existent ride. ride id does not exist",
-			ride: &Ride{
+			ride: &rides.Ride{
 				ID:               5823,
 				IdempotencyKeyID: TestExistingRide.IdempotencyKeyID,
 				Origin:           TestExistingRide.Origin,
-				Target: Coordinate{
+				Target: rides.Coordinate{
 					Lat:  TestExistingRide.Target.Long + 10.0,
 					Long: TestExistingRide.Target.Long + 10.0,
 				},
@@ -196,7 +197,7 @@ func TestRideService_UpdateRide(t *testing.T) {
 
 			tx := test.MakeTx(t, ctx, db)
 
-			rideService := MakeService()
+			rideService := rides.MakeService()
 
 			updatedRide, err := rideService.UpdateRide(ctx, tx, tc.ride)
 			if tc.expectedErr {
@@ -234,7 +235,7 @@ func TestRideService_DeleteRide(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			rideService := MakeService()
+			rideService := rides.MakeService()
 			ctx := context.Background()
 
 			db := test.MakePostgres(t)

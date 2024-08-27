@@ -16,3 +16,7 @@ clean:
 .PHONY: test
 test:
 	@go test ./...
+
+.PHONY: check
+check:
+	@go vet ./...

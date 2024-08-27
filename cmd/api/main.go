@@ -5,26 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"github.com/anmho/idempotent-rides/api"
+	"github.com/caarlos0/env/v11"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/joho/godotenv"
+	"github.com/stripe/stripe-go/v79"
 	"log"
 	"log/slog"
 	"net/http"
-)
-
-const (
-	dbUser = "admin"
-	dbPass = "admin"
-	dbPort = "5433"
-	dbHost = "localhost"
-	dbName = "rocket_rides"
+	"os"
 )
 
 const (
 	port = 8080
-)
-
-var (
-	dbURL = MakeConnString(dbUser, dbPass, dbPort, dbHost, dbName)
 )
 
 func MakeConnString(
@@ -32,7 +24,33 @@ func MakeConnString(
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, pass, host, name, port)
 }
 
+type config struct {
+	DBUser string `env:"DB_USER"`
+	DBPass string `env:"DB_PASS"`
+	DBHost string `env:"DB_HOST"`
+	DBPort string `env:"DB_PORT"`
+	DBName string `env:"DB_NAME"`
+
+	StripeKey string `env:"STRIPE_KEY"`
+}
+
 func main() {
+	if os.Getenv("STAGE") == "" || os.Getenv("STAGE") == "development" {
+		err := godotenv.Load()
+		if err != nil {
+			log.Fatalln("Error loading .env file", err)
+		}
+	}
+
+	var cfg config
+	err := env.Parse(&cfg)
+	if err != nil {
+		log.Fatalln("error parsing config")
+	}
+	fmt.Printf("%+v\n", cfg)
+	dbURL := MakeConnString(cfg.DBUser, cfg.DBPass, cfg.DBPort, cfg.DBHost, cfg.DBName)
+
+	stripe.Key = cfg.StripeKey
 	db, err := sql.Open("pgx", dbURL)
 	mux := api.MakeServer(db)
 

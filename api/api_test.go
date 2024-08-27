@@ -1,15 +1,17 @@
-package api
+package api_test
 
 import (
 	"encoding/json"
+	"github.com/anmho/idempotent-rides/api"
 	"github.com/anmho/idempotent-rides/idempotency"
 	"github.com/anmho/idempotent-rides/rides"
+	"github.com/anmho/idempotent-rides/send"
 	"github.com/anmho/idempotent-rides/test"
 	"github.com/anmho/idempotent-rides/users"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stripe/stripe-go/v79/customer"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -21,7 +23,12 @@ const (
 )
 
 var (
-	emptyRequestBody = RideReservationParams{}
+	emptyRequestBody = api.RideReservationParams{}
+	JoshTestUser     = &users.User{
+		ID:               1337,
+		Email:            "jgoon@uiuc.edu",
+		StripeCustomerID: "cus_Qjlq6Bl2Bb2nTq",
+	}
 )
 
 func TestServer_handleRideReservation(t *testing.T) {
@@ -31,7 +38,7 @@ func TestServer_handleRideReservation(t *testing.T) {
 		desc           string
 		idempotencyKey string
 		method         idempotency.RequestMethod
-		params         RideReservationParams
+		params         api.RideReservationParams
 
 		expectedStatus int
 	}{
@@ -55,8 +62,8 @@ func TestServer_handleRideReservation(t *testing.T) {
 			desc:           "POST /rides: valid idempotency key that is not in the database",
 			idempotencyKey: newIdempotencyKey,
 			method:         http.MethodPost,
-			params: RideReservationParams{
-				UserID: users.TestUser1ID,
+			params: api.RideReservationParams{
+				UserID: &JoshTestUser.ID,
 				Origin: rides.Coordinate{},
 				Target: rides.Coordinate{},
 			},
@@ -66,8 +73,8 @@ func TestServer_handleRideReservation(t *testing.T) {
 			desc:           "POST /rides: valid idempotency key that is in the database",
 			idempotencyKey: dbIdempotencyKey,
 			method:         http.MethodPost,
-			params: RideReservationParams{
-				UserID: users.TestUser1ID,
+			params: api.RideReservationParams{
+				UserID: &JoshTestUser.ID,
 				Origin: rides.Coordinate{},
 				Target: rides.Coordinate{},
 			},
@@ -77,21 +84,64 @@ func TestServer_handleRideReservation(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := test.MakePostgres(t)
-
-			rocketRides := MakeServer(db)
-			srv := httptest.NewServer(rocketRides)
-			t.Cleanup(func() {
-				srv.Close()
-			})
+			srv := test.MakeTestServer(t)
 
 			body := strings.NewReader(string(must(json.Marshal(tc.params))))
 			client := srv.Client()
 			req := must(http.NewRequest(tc.method.String(), srv.URL+"/rides", body))
 			req.Header.Set(idempotency.HeaderKey, tc.idempotencyKey)
-			res := must(client.Do(req))
-			require.NotNil(t, res)
-			assert.Equal(t, tc.expectedStatus, res.StatusCode)
+			resp := must(client.Do(req))
+			require.NotNil(t, resp)
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+		})
+	}
+}
+
+func TestServer_handleRegisterUser(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		desc   string
+		params api.RegisterUserParams
+
+		expectedStatus int
+		expectedUser   *users.User
+	}{
+		{
+			desc: "happy path: registering valid user with available email",
+			params: api.RegisterUserParams{
+				Email: "testuser@uiuc.edu",
+			},
+			expectedStatus: http.StatusCreated,
+			expectedUser: &users.User{
+				ID:    1,
+				Email: "testuser@uiuc.edu",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			srv := test.MakeTestServer(t)
+
+			body := strings.NewReader(string(must(json.Marshal(tc.params))))
+			client := srv.Client()
+			req := must(http.NewRequest(http.MethodPost, srv.URL+"/users", body))
+
+			resp := must(client.Do(req))
+			require.NotNil(t, resp)
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+			user, err := send.Read[*users.User](resp.Body)
+			require.NoError(t, err)
+			assert.NotNil(t, user)
+
+			assert.Equal(t, tc.expectedUser.Email, user.Email)
+
+			t.Cleanup(func() {
+				_, err := customer.Del(
+					user.StripeCustomerID, nil,
+				)
+				assert.NoError(t, err)
+			})
 		})
 	}
 }

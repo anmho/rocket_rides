@@ -30,7 +30,7 @@ type Ride struct {
 	UserID         int
 }
 
-func New(idempotencyKeyID int, target, origin Coordinate) (*Ride, error) {
+func New(idempotencyKeyID int, target, origin Coordinate, userID int) (*Ride, error) {
 	// do ride validation here
 	if !target.IsValid() {
 		return nil, errors.New("invalid target")
@@ -50,6 +50,6 @@ func New(idempotencyKeyID int, target, origin Coordinate) (*Ride, error) {
 		Origin:         origin,
 		Target:         target,
 		StripeChargeID: sql.Null[string]{},
-		UserID:         0,
+		UserID:         userID,
 	}, nil
 }

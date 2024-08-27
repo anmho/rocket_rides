@@ -3,6 +3,7 @@ package send
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -12,9 +13,9 @@ func WriteJSON[T any](w http.ResponseWriter, status int, data T) error {
 	return json.NewEncoder(w).Encode(data)
 }
 
-func Read[T any](r *http.Request) (T, error) {
+func Read[T any](data io.ReadCloser) (T, error) {
 	var v T
-	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
+	if err := json.NewDecoder(data).Decode(&v); err != nil {
 		return v, fmt.Errorf("decoding json: %w", err)
 	}
 	return v, nil

@@ -1,23 +1,11 @@
-package users
+package users_test
 
 import (
 	"context"
 	"github.com/anmho/idempotent-rides/test"
+	"github.com/anmho/idempotent-rides/users"
 	"github.com/stretchr/testify/assert"
 	"testing"
-)
-
-var (
-	TestUser1 = &User{
-		ID:               *TestUser1ID,
-		Email:            "awesome-user@email.com",
-		StripeCustomerID: "sk_123",
-	}
-	NewTestUser = &User{
-		ID:               999,
-		Email:            "new-test-user@email.com",
-		StripeCustomerID: "sk_999",
-	}
 )
 
 func TestService_GetUser(t *testing.T) {
@@ -26,13 +14,13 @@ func TestService_GetUser(t *testing.T) {
 		userID int
 
 		expectedErr  bool
-		expectedUser *User
+		expectedUser *users.User
 	}{
 		{
 			desc:   "happy path: get user that exists in db",
-			userID: TestUser1.ID,
+			userID: users.TestUser1.ID,
 
-			expectedUser: TestUser1,
+			expectedUser: users.TestUser1,
 		},
 	}
 
@@ -42,7 +30,7 @@ func TestService_GetUser(t *testing.T) {
 			ctx := context.Background()
 			tx := test.MakeTx(t, ctx, db)
 
-			userService := MakeService()
+			userService := users.MakeService()
 			user, err := userService.GetUser(ctx, tx, tc.userID)
 			if tc.expectedErr {
 				assert.Error(t, err)
@@ -57,15 +45,15 @@ func TestService_GetUser(t *testing.T) {
 func TestService_CreateUser(t *testing.T) {
 	tests := []struct {
 		desc string
-		user *User
+		user *users.User
 
 		expectedErr  bool
-		expectedUser *User
+		expectedUser *users.User
 	}{
 		{
 			desc:         "happy path: attempt to create a new user",
-			user:         NewTestUser,
-			expectedUser: NewTestUser,
+			user:         users.NewTestUserNotInDB,
+			expectedUser: users.NewTestUserNotInDB,
 		},
 	}
 
@@ -76,7 +64,7 @@ func TestService_CreateUser(t *testing.T) {
 			ctx := context.Background()
 			tx := test.MakeTx(t, ctx, db)
 
-			userService := MakeService()
+			userService := users.MakeService()
 			user, err := userService.CreateUser(ctx, tx, tc.user)
 
 			if tc.expectedErr {
@@ -93,30 +81,30 @@ func TestService_CreateUser(t *testing.T) {
 func TestService_UpdateUser(t *testing.T) {
 	tests := []struct {
 		desc string
-		user *User
+		user *users.User
 
 		expectedErr  bool
-		expectedUser *User
+		expectedUser *users.User
 	}{
 		{
 			desc: "happy path: update user that exists",
-			user: &User{
-				ID:               TestUser1.ID,
+			user: &users.User{
+				ID:               users.TestUser1.ID,
 				Email:            "updated-test-user-email@xxx.com",
-				StripeCustomerID: "sk_new-stripe-user-account", // we make this stripe account on behalf of the user
+				StripeCustomerID: "sk_new-stripe-user-account",
 			},
-			expectedUser: &User{
-				ID:               TestUser1.ID,
+			expectedUser: &users.User{
+				ID:               users.TestUser1.ID,
 				Email:            "updated-test-user-email@xxx.com",
 				StripeCustomerID: "sk_new-stripe-user-account",
 			},
 		},
 		{
 			desc: "error path: update user that doesn't exist",
-			user: &User{
+			user: &users.User{
 				ID:               759123,
 				Email:            "updated-test-user-email@xxx.com",
-				StripeCustomerID: "sk_new-stripe-user-account", // we make this stripe account on behalf of the user
+				StripeCustomerID: "sk_new-stripe-user-account",
 			},
 			expectedErr: true,
 		},
@@ -131,7 +119,7 @@ func TestService_UpdateUser(t *testing.T) {
 			tx := test.MakeTx(t, ctx, db)
 			test.MakeTx(t, ctx, db)
 
-			userService := MakeService()
+			userService := users.MakeService()
 			user, err := userService.UpdateUser(ctx, tx, tc.user)
 			if tc.expectedErr {
 				assert.Error(t, err)
@@ -155,7 +143,7 @@ func TestService_DeleteUser(t *testing.T) {
 	}{
 		{
 			desc:                "happy path: delete user that exists",
-			userID:              TestUser1.ID,
+			userID:              users.TestUser1.ID,
 			expectedAffectedRow: true,
 			expectedErr:         false,
 		},
@@ -171,10 +159,8 @@ func TestService_DeleteUser(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			db := test.MakePostgres(t)
-
 			ctx := context.Background()
-
-			userService := MakeService()
+			userService := users.MakeService()
 
 			tx := test.MakeTx(t, ctx, db)
 			affectedRow, err := userService.DeleteUser(ctx, tx, tc.userID)

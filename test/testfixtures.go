@@ -3,15 +3,40 @@ package test
 import (
 	"context"
 	"database/sql"
+	"github.com/anmho/idempotent-rides/api"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/require"
+	"github.com/stripe/stripe-go/v79"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 )
 
+func init() {
+	err := godotenv.Load("../.env")
+	if err != nil {
+		panic(err)
+	}
+
+	stripeKey := os.Getenv("STRIPE_KEY")
+	stripe.Key = stripeKey
+}
+
+func MakeTestServer(t *testing.T) *httptest.Server {
+	db := MakePostgres(t)
+	rocketRides := api.MakeServer(db)
+	srv := httptest.NewServer(rocketRides)
+	t.Cleanup(func() {
+		srv.Close()
+	})
+
+	return srv
+}
 func MakeTx(t *testing.T, ctx context.Context, db *sql.DB) *sql.Tx {
 	require.NotNil(t, db)
 

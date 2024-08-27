@@ -51,7 +51,6 @@ func (rs *service) GetRide(ctx context.Context, tx *sql.Tx, rideID int) (*Ride, 
 }
 
 func (rs *service) CreateRide(ctx context.Context, tx *sql.Tx, ride *Ride) (*Ride, error) {
-
 	stmt, err := tx.PrepareContext(ctx,
 		`
 	INSERT INTO rocket_rides.public.rides (

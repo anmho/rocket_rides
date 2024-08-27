@@ -1,8 +1,9 @@
-package idempotency
+package idempotency_test
 
 import (
 	"context"
 	"database/sql"
+	"github.com/anmho/idempotent-rides/idempotency"
 	"github.com/anmho/idempotent-rides/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,7 +17,7 @@ const (
 )
 
 var (
-	TestKeyStarted = Key{
+	TestKeyStarted = idempotency.Key{
 		ID:            736,
 		CreatedAt:     time.Time{},
 		Key:           "testKeyStarted",
@@ -27,10 +28,10 @@ var (
 		RequestPath:   "/charges",
 		ResponseCode:  sql.Null[int]{},
 		ResponseBody:  sql.Null[[]byte]{},
-		RecoveryPoint: StartedRecoveryPoint,
+		RecoveryPoint: idempotency.StartedRecoveryPoint,
 		UserID:        TestUserID,
 	}
-	TestKeyRideCreated = Key{
+	TestKeyRideCreated = idempotency.Key{
 		ID:            737,
 		CreatedAt:     time.Time{},
 		Key:           "testKeyRideCreated",
@@ -41,10 +42,10 @@ var (
 		RequestPath:   "/rides",
 		ResponseCode:  sql.Null[int]{},
 		ResponseBody:  sql.Null[[]byte]{},
-		RecoveryPoint: RideCreatedRecoveryPoint,
+		RecoveryPoint: idempotency.RideCreatedRecoveryPoint,
 		UserID:        123,
 	}
-	TestKeyRideChargeCreated = Key{
+	TestKeyRideChargeCreated = idempotency.Key{
 		ID:            737,
 		CreatedAt:     time.Time{},
 		Key:           "testKeyChargeCreated",
@@ -58,7 +59,7 @@ var (
 		RecoveryPoint: "charge_created",
 		UserID:        123,
 	}
-	TestKeyFinished = Key{
+	TestKeyFinished = idempotency.Key{
 		ID:            738,
 		CreatedAt:     time.Time{},
 		Key:           "testKeyFinished",
@@ -74,7 +75,7 @@ var (
 	}
 )
 
-func assertEqualIdempotencyKey(t *testing.T, expectedIdempotencyKey, idempotencyKey *Key) {
+func assertEqualIdempotencyKey(t *testing.T, expectedIdempotencyKey, idempotencyKey *idempotency.Key) {
 	assert.Equal(t, expectedIdempotencyKey.ID, idempotencyKey.ID, "key id")
 	assert.Equal(t, expectedIdempotencyKey.Key, idempotencyKey.Key, "key strings")
 	assert.Equal(t, expectedIdempotencyKey.UserID, idempotencyKey.UserID, "UserID")
@@ -97,7 +98,7 @@ func Test_GetIdempotencyKey(t *testing.T) {
 		key    string
 
 		expectedErr            bool
-		expectedIdempotencyKey *Key
+		expectedIdempotencyKey *idempotency.Key
 	}{
 		{
 			name:   "happy path: full idempotency key is present",
@@ -105,7 +106,7 @@ func Test_GetIdempotencyKey(t *testing.T) {
 			key:    "testKeyFinished",
 
 			expectedErr: false,
-			expectedIdempotencyKey: &Key{
+			expectedIdempotencyKey: &idempotency.Key{
 				ID:            739,
 				Key:           "testKeyFinished",
 				RequestMethod: http.MethodPost,
@@ -119,7 +120,7 @@ func Test_GetIdempotencyKey(t *testing.T) {
 					V:     []byte("{}"),
 					Valid: true,
 				},
-				RecoveryPoint: FinishedRecoveryPoint,
+				RecoveryPoint: idempotency.FinishedRecoveryPoint,
 				UserID:        TestUserID,
 			},
 		},
@@ -133,7 +134,7 @@ func Test_GetIdempotencyKey(t *testing.T) {
 			tx, err := db.BeginTx(ctx, nil)
 			require.NoError(t, err)
 
-			idempotencyKey, err := FindKey(ctx, tx, tc.userID, tc.key)
+			idempotencyKey, err := idempotency.FindKey(ctx, tx, tc.userID, tc.key)
 			if tc.expectedErr {
 				assert.Error(t, err)
 			} else {
@@ -150,13 +151,13 @@ func Test_InsertIdempotencyKey(t *testing.T) {
 	u1 := TestUserID
 	tests := []struct {
 		name   string
-		params KeyParams
+		params idempotency.KeyParams
 
-		expectedIdempotencyKey *Key
+		expectedIdempotencyKey *idempotency.Key
 	}{
 		{
 			name: "happy path: insert new idempotency key with valid fields and empty body",
-			params: KeyParams{
+			params: idempotency.KeyParams{
 				Key:           "awesomeKey",
 				RequestMethod: http.MethodPost,
 				RequestParams: []byte("{}"),
@@ -165,7 +166,7 @@ func Test_InsertIdempotencyKey(t *testing.T) {
 			},
 
 			// We will assume timestamps will work since they are harder to mock but we should find a way.
-			expectedIdempotencyKey: &Key{
+			expectedIdempotencyKey: &idempotency.Key{
 				ID:            1,
 				Key:           "awesomeKey",
 				RequestMethod: http.MethodPost,
@@ -173,7 +174,7 @@ func Test_InsertIdempotencyKey(t *testing.T) {
 				RequestPath:   "/charges",
 				ResponseBody:  sql.Null[[]byte]{},
 				ResponseCode:  sql.Null[int]{},
-				RecoveryPoint: StartedRecoveryPoint,
+				RecoveryPoint: idempotency.StartedRecoveryPoint,
 				UserID:        u1,
 			},
 		},
@@ -188,7 +189,7 @@ func Test_InsertIdempotencyKey(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, tx)
 
-			idempotencyKey, err := InsertKey(ctx, tx, tc.params)
+			idempotencyKey, err := idempotency.InsertKey(ctx, tx, tc.params)
 			require.NoError(t, err)
 			require.NoError(t, err)
 			assert.NotNil(t, idempotencyKey, "idempotency not nil")
@@ -205,14 +206,14 @@ func Test_UpdateIdempotencyKey(t *testing.T) {
 
 	tests := []struct {
 		desc string
-		key  *Key
+		key  *idempotency.Key
 
 		expectedErr bool
-		expectedKey *Key
+		expectedKey *idempotency.Key
 	}{
 		{
 			desc: "happy path: update ride created key that exists in the database to be charge created ",
-			key: &Key{
+			key: &idempotency.Key{
 				ID:            TestKeyRideCreated.ID,
 				CreatedAt:     TestKeyRideCreated.CreatedAt,
 				Key:           TestKeyRideCreated.Key,
@@ -223,11 +224,11 @@ func Test_UpdateIdempotencyKey(t *testing.T) {
 				RequestPath:   TestKeyRideCreated.RequestPath,
 				ResponseCode:  TestKeyRideCreated.ResponseCode,
 				ResponseBody:  TestKeyRideCreated.ResponseBody,
-				RecoveryPoint: ChargeCreatedRecoveryPoint,
+				RecoveryPoint: idempotency.ChargeCreatedRecoveryPoint,
 				UserID:        TestKeyRideCreated.UserID,
 			},
 
-			expectedKey: &Key{
+			expectedKey: &idempotency.Key{
 				ID:            TestKeyRideCreated.ID,
 				CreatedAt:     TestKeyRideCreated.CreatedAt,
 				Key:           TestKeyRideCreated.Key,
@@ -238,7 +239,7 @@ func Test_UpdateIdempotencyKey(t *testing.T) {
 				RequestPath:   TestKeyRideCreated.RequestPath,
 				ResponseCode:  TestKeyRideCreated.ResponseCode,
 				ResponseBody:  TestKeyRideCreated.ResponseBody,
-				RecoveryPoint: ChargeCreatedRecoveryPoint,
+				RecoveryPoint: idempotency.ChargeCreatedRecoveryPoint,
 				UserID:        TestKeyRideCreated.UserID,
 			},
 		},
@@ -254,7 +255,7 @@ func Test_UpdateIdempotencyKey(t *testing.T) {
 				ReadOnly:  false,
 			}))
 
-			updatedKey, err := UpdateKey(ctx, tx, tc.key)
+			updatedKey, err := idempotency.UpdateKey(ctx, tx, tc.key)
 			require.NotNil(t, updatedKey)
 			require.NoError(t, err)
 

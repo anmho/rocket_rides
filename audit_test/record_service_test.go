@@ -1,7 +1,8 @@
-package audit
+package audit_test
 
 import (
 	"context"
+	audit "github.com/anmho/idempotent-rides/audit_test"
 	"github.com/anmho/idempotent-rides/test"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -9,24 +10,24 @@ import (
 )
 
 var (
-	ExistingTestRecord = &Record{
+	ExistingTestRecord = &audit.Record{
 		ID:       4321,
 		Action:   "created",
 		Data:     []byte("{}"),
 		OriginIP: "127.0.0.1/32",
-		Resource: Resource{
+		Resource: audit.Resource{
 			ID:   1441,
 			Type: "ride",
 		},
 		UserID: 123,
 	}
-	NewTestRecord = &Record{
+	NewTestRecord = &audit.Record{
 		ID:        1,
 		Action:    "ride_charged",
 		CreatedAt: time.Time{},
 		Data:      []byte("{\"target\": {\"\": {\"lat\": 10, \"long\": 20}}}"),
 		OriginIP:  "127.0.0.1/32",
-		Resource: Resource{
+		Resource: audit.Resource{
 			ID:   1441,
 			Type: "ride",
 		},
@@ -34,7 +35,7 @@ var (
 	}
 )
 
-func assertEqualRecord(t *testing.T, expected, record *Record) {
+func assertEqualRecord(t *testing.T, expected, record *audit.Record) {
 	assert.Equal(t, expected.ID, record.ID)
 	assert.Equal(t, expected.Action, record.Action)
 	assert.Equal(t, expected.Data, record.Data)
@@ -49,7 +50,7 @@ func TestService_GetRecord(t *testing.T) {
 		recordID int
 
 		expectedErr    bool
-		expectedRecord *Record
+		expectedRecord *audit.Record
 	}{
 		{
 			desc:     "happy path: get existing record by id",
@@ -64,7 +65,7 @@ func TestService_GetRecord(t *testing.T) {
 			db := test.MakePostgres(t)
 			ctx := context.Background()
 			tx := test.MakeTx(t, ctx, db)
-			s := MakeService()
+			s := audit.MakeService()
 
 			record, err := s.GetRecord(ctx, tx, tc.recordID)
 			if tc.expectedErr {
@@ -82,10 +83,10 @@ func TestService_GetRecord(t *testing.T) {
 func TestService_CreateRecord(t *testing.T) {
 	tests := []struct {
 		desc   string
-		record *Record
+		record *audit.Record
 
 		expectedErr    bool
-		expectedRecord *Record
+		expectedRecord *audit.Record
 	}{
 		{
 			desc:   "happy path: create record that doesn't exist yet",
@@ -101,7 +102,7 @@ func TestService_CreateRecord(t *testing.T) {
 			db := test.MakePostgres(t)
 			ctx := context.Background()
 			tx := test.MakeTx(t, ctx, db)
-			s := MakeService()
+			s := audit.MakeService()
 			record, err := s.CreateRecord(ctx, tx, tc.record)
 			if tc.expectedErr {
 				assert.Error(t, err)
@@ -118,14 +119,14 @@ func TestService_CreateRecord(t *testing.T) {
 //func TestService_UpdateRecord(t *testing.T) {
 //	tests := []struct {
 //		desc   string
-//		record *Record
+//		record *audit.Record
 //
 //		expectedErr    bool
-//		expectedRecord *Record
+//		expectedRecord *audit.Record
 //	}{
 //		{
 //			desc: "happy path: update existing record",
-//			record: &Record{
+//			record: &audit.Record{
 //				ID:        ExistingTestRecord.ID,
 //				Action:    ExistingTestRecord.Action,
 //				CreatedAt: ExistingTestRecord.CreatedAt,

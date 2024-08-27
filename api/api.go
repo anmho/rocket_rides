@@ -5,15 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/anmho/idempotent-rides/audit"
+	audit "github.com/anmho/idempotent-rides/audit_test"
 	"github.com/anmho/idempotent-rides/idempotency"
 	"github.com/anmho/idempotent-rides/rides"
 	"github.com/anmho/idempotent-rides/scope"
 	"github.com/anmho/idempotent-rides/send"
 	"github.com/anmho/idempotent-rides/users"
+	"github.com/stripe/stripe-go/v79"
+	"github.com/stripe/stripe-go/v79/customer"
 	"log"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -30,7 +33,7 @@ func MakeServer(db *sql.DB) http.Handler {
 }
 
 func handleError(w http.ResponseWriter, err error) {
-	if errors.Is(err, &send.HTTPError{}) {
+	if errors.As(err, &send.HTTPError{}) {
 		send.Error(w, err.(send.HTTPError))
 	} else {
 		send.Error(w, send.NewErrInternal(err))
@@ -57,6 +60,65 @@ func validateIdempotencyKey(key string) bool {
 	return len(key) >= MinIdempotencyKeyLength
 }
 
+type RegisterUserParams struct {
+	Email string
+}
+
+func handleRegisterUser(db *sql.DB, userService users.Service) RouteHandler {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		ctx := r.Context()
+		params, err := send.Read[RegisterUserParams](r.Body)
+		if err != nil {
+			return send.HTTPError{
+				Cause:   err,
+				Message: "bad request - invalid params for register user",
+				Status:  http.StatusBadRequest,
+			}
+		}
+
+		customerParams := &stripe.CustomerParams{
+			Name:  stripe.String("test customer"),
+			Email: stripe.String(params.Email),
+		}
+
+		result, err := customer.New(customerParams)
+		if err != nil {
+			return err
+		}
+
+		tx, err := db.BeginTx(ctx, &sql.TxOptions{
+			Isolation: sql.LevelSerializable,
+		})
+		if err != nil {
+			return err
+		}
+		defer func(tx *sql.Tx) {
+			err := tx.Rollback()
+			scope.GetLogger().Error("error transaction", slog.Any("err", err))
+		}(tx)
+
+		user := users.New(params.Email, result.ID)
+		createdUser, err := userService.CreateUser(ctx, tx, user)
+		if err != nil {
+			return err
+		}
+
+		user = createdUser
+
+		scope.GetLogger().Info(
+			"creating stripe customer",
+			slog.Any("stripeCustomerID", user.StripeCustomerID),
+		)
+
+		err = tx.Commit()
+		if err != nil {
+			return err
+		}
+
+		return send.WriteJSON[*users.User](w, http.StatusCreated, user)
+	}
+}
+
 type RideReservationParams struct {
 	UserID *int
 	Origin rides.Coordinate
@@ -79,7 +141,7 @@ func handleRideReservation(db *sql.DB, rideService rides.Service, auditService a
 				Status:  http.StatusBadRequest,
 			}
 		}
-		params, err := send.Read[RideReservationParams](r)
+		params, err := send.Read[RideReservationParams](r.Body)
 		if err != nil {
 			return send.HTTPError{
 				Cause:   err,
@@ -139,6 +201,10 @@ func handleRideReservation(db *sql.DB, rideService rides.Service, auditService a
 
 		var ride *rides.Ride
 		var updatedKey *idempotency.Key
+		//user, err := userService.GetUser(ctx, db, userID)
+		//if err != nil {
+		//	return err
+		//}
 
 		// Once we have the key, we'll continue the work and verify it is not completed.
 		for {
@@ -152,13 +218,17 @@ func handleRideReservation(db *sql.DB, rideService rides.Service, auditService a
 					func(tx *sql.Tx) (idempotency.AtomicPhaseResult, error) {
 						// Checkpoint 2: ride_created
 						//	Create ride
-						ride, err = rides.New(key.ID, params.Origin, params.Origin)
+						ride, err = rides.New(key.ID, params.Origin, params.Origin, userID)
 						if err != nil {
 							return nil, send.HTTPError{
 								Cause:   nil,
 								Message: "bad request for ride",
 								Status:  http.StatusBadRequest,
 							}
+						}
+						ride, err = rideService.CreateRide(ctx, tx, ride)
+						if err != nil {
+							return nil, err
 						}
 
 						//	Create ride audit record
@@ -173,7 +243,9 @@ func handleRideReservation(db *sql.DB, rideService rides.Service, auditService a
 							}
 						}
 
-						record := audit.NewRecord("create_ride", data, r.RemoteAddr, audit.Resource{
+						ip := strings.Split(r.RemoteAddr, ":")[0]
+
+						record := audit.NewRecord("create_ride", data, ip, audit.Resource{
 							ID:   ride.ID,
 							Type: "ride",
 						}, *params.UserID)
@@ -194,11 +266,12 @@ func handleRideReservation(db *sql.DB, rideService rides.Service, auditService a
 						if err != nil {
 							return nil, fmt.Errorf("creating audit record: %w", err)
 						}
+						ip := strings.Split(r.RemoteAddr, ":")[0]
 						record, err := auditService.CreateRecord(ctx, tx, &audit.Record{
 							Action:    "created",
 							CreatedAt: time.Now(),
 							Data:      bytes,
-							OriginIP:  r.RemoteAddr,
+							OriginIP:  ip,
 							Resource: audit.Resource{
 								ID:   ride.ID,
 								Type: "ride",
@@ -214,21 +287,26 @@ func handleRideReservation(db *sql.DB, rideService rides.Service, auditService a
 							slog.Any("record", record))
 
 						// 	Charge user via Stripe
+
 						//	Update ride
-						scope.GetLogger().Info("RideCreatedRecoveryPoint")
+						scope.GetLogger().Info("RideCreatedRecoveryPoint", slog.Any("idempotencyKey", key))
 						return idempotency.NewRecoveryPointResult(idempotency.ChargeCreatedRecoveryPoint), nil
 					},
 				)
 			case idempotency.ChargeCreatedRecoveryPoint:
 				updatedKey, err = idempotency.AtomicPhase(ctx, key, db,
 					func(tx *sql.Tx) (idempotency.AtomicPhaseResult, error) {
-						// Checkpoint 4: Charge user via Stripe
+						// Checkpoint 4:
+						//	Charge user via Stripe
+
 						//	Stage send receipt job
 						scope.GetLogger().Info("ChargeCreatedRecoveryPoint")
 						// need to get the ride id
 						return idempotency.NewResponseResult(http.StatusCreated, map[string]any{"ride_id": "hello"}), nil
 					},
 				)
+
+				scope.GetLogger().Info("ChargeCreatedRecoveryPoint", slog.Any("idempotencyKey", updatedKey))
 			case idempotency.FinishedRecoveryPoint:
 				goto loop
 			default:
@@ -242,7 +320,6 @@ func handleRideReservation(db *sql.DB, rideService rides.Service, auditService a
 			key = updatedKey
 		}
 	loop:
-		send.WriteJSON(w, key.ResponseCode.V, key.ResponseBody.V)
-		return nil
+		return send.WriteJSON(w, key.ResponseCode.V, key.ResponseBody.V)
 	}
 }
