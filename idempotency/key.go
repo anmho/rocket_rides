@@ -165,7 +165,7 @@ func UpdateKey(ctx context.Context, tx *sql.Tx, key *Key) (*Key, error) {
 		&updatedKey.ResponseCode, &updatedKey.ResponseBody,
 		&updatedKey.RecoveryPoint, &updatedKey.UserID,
 	)
-	//err = scanAllKeyFields(row, &updatedKey)
+
 	if err != nil {
 		return nil, err
 	}

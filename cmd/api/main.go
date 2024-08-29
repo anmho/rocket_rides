@@ -21,7 +21,7 @@ const (
 
 func MakeConnString(
 	user, pass, host, port, name string) string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, pass, host, name, port)
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, pass, host, port, name)
 }
 
 type config struct {
@@ -48,7 +48,7 @@ func main() {
 		log.Fatalln("error parsing config")
 	}
 	fmt.Printf("%+v\n", cfg)
-	dbURL := MakeConnString(cfg.DBUser, cfg.DBPass, cfg.DBPort, cfg.DBHost, cfg.DBName)
+	dbURL := MakeConnString(cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName)
 
 	stripe.Key = cfg.StripeKey
 	db, err := sql.Open("pgx", dbURL)

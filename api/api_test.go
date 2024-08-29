@@ -64,8 +64,8 @@ func TestServer_handleRideReservation(t *testing.T) {
 			method:         http.MethodPost,
 			params: api.RideReservationParams{
 				UserID: &JoshTestUser.ID,
-				Origin: rides.Coordinate{},
-				Target: rides.Coordinate{},
+				Origin: &rides.Coordinate{},
+				Target: &rides.Coordinate{},
 			},
 			expectedStatus: http.StatusCreated,
 		},
@@ -75,8 +75,8 @@ func TestServer_handleRideReservation(t *testing.T) {
 			method:         http.MethodPost,
 			params: api.RideReservationParams{
 				UserID: &JoshTestUser.ID,
-				Origin: rides.Coordinate{},
-				Target: rides.Coordinate{},
+				Origin: &rides.Coordinate{},
+				Target: &rides.Coordinate{},
 			},
 
 			expectedStatus: http.StatusCreated,

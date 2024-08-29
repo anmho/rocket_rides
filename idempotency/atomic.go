@@ -49,7 +49,6 @@ func (r *RecoveryPointResult) UpdateKeyForNextPhase(ctx context.Context, tx *sql
 	*newKey = *key
 	newKey.RecoveryPoint = r.RecoveryPoint
 
-	scope.GetLogger().Error("UpdateKeyForNextPhase")
 	return newKey, nil
 }
 
@@ -103,7 +102,9 @@ func AtomicPhase(ctx context.Context, key *Key, db *sql.DB, block BlockFunc) (*K
 	}
 	defer func(tx *sql.Tx) {
 		err := tx.Rollback()
-		scope.GetLogger().Error("failed to rollback", slog.Any("cause", err))
+		if err != nil && !errors.Is(err, sql.ErrTxDone) {
+			scope.GetLogger().Error("failed to rollback", slog.Any("cause", err))
+		}
 	}(tx)
 
 	result, err := block(tx)
@@ -119,17 +120,23 @@ func AtomicPhase(ctx context.Context, key *Key, db *sql.DB, block BlockFunc) (*K
 	}
 
 	if err != nil {
-		scope.GetLogger().Error("error during transaction", slog.Any("cause", err))
+		scope.GetLogger().Error("atomic phase transaction", slog.Any("cause", err), slog.Any("idempotencyKey", key))
 		if updatedKey != nil {
 			// If we're leaving under an error condition, try to unlock the idempotency
 			// key right away so that another request can try again.
 			// release the idempotency key lock
+
+			_ = tx.Rollback()
 			updatedKey.LockedAt = sql.Null[time.Time]{}
 			_, err = UpdateKey(ctx, tx, updatedKey)
 			if err != nil {
 				return nil, err
 			}
 			// this needs to be committed
+			err = tx.Commit()
+			if err != nil {
+				scope.GetLogger().Error("atomic phase attempt to unlock", slog.Any("error", err))
+			}
 		}
 		return nil, err
 	}

@@ -3,6 +3,10 @@ package rides
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"github.com/anmho/idempotent-rides/scope"
+	"github.com/jackc/pgx/v5/pgconn"
+	"log/slog"
 )
 
 type Service interface {
@@ -90,6 +94,11 @@ func (rs *service) CreateRide(ctx context.Context, tx *sql.Tx, ride *Ride) (*Rid
 		&newRide.StripeChargeID, &newRide.UserID,
 	)
 	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			scope.GetLogger().Error("pgerror", slog.Any("error", pgErr))
+		}
 		return nil, err
 	}
 

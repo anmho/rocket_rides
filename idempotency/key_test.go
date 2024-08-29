@@ -124,6 +124,13 @@ func Test_GetIdempotencyKey(t *testing.T) {
 				UserID:        TestUserID,
 			},
 		},
+		{
+			name:   "error path: user exists but associated idempotency key is not in the database. should error ErrSQLNoRows",
+			userID: TestUserID,
+			key:    "keyThatDoesntExist",
+
+			expectedErr: true,
+		},
 	}
 
 	for _, tc := range tests {

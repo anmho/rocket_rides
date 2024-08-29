@@ -12,7 +12,7 @@ func Test_MakeConnString(t *testing.T) {
 	host := "localhost"
 	name := "rocket_rides"
 
-	connStr := MakeConnString(user, pass, host, name, port)
+	connStr := MakeConnString(user, pass, host, port, name)
 
 	assert.Equal(t, "postgres://admin:admin@localhost:5433/rocket_rides", connStr)
 }

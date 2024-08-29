@@ -3,6 +3,8 @@ package audit
 import (
 	"context"
 	"database/sql"
+	"github.com/anmho/idempotent-rides/scope"
+	"log/slog"
 )
 
 type Service interface {
@@ -40,6 +42,7 @@ func (s *service) GetRecord(ctx context.Context, tx *sql.Tx, id int) (*Record, e
 		&record.Action, &record.Data, &record.OriginIP,
 		&record.Resource.ID, &record.Resource.Type, &record.UserID,
 	)
+	scope.GetLogger().Error("GetRecord", slog.Any("record", record))
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +81,8 @@ func (s *service) CreateRecord(ctx context.Context, tx *sql.Tx, record *Record) 
 		&newRecord.Resource.ID, &newRecord.Resource.Type,
 		&newRecord.UserID,
 	)
+
+	scope.GetLogger().Error("GetRecord", slog.Any("record", record))
 
 	if err != nil {
 		return nil, err
