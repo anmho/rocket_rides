@@ -13,21 +13,24 @@ import (
 
 var (
 	TestExistingRide = &rides.Ride{
-		ID: 1337,
+		ID: 1442,
 		IdempotencyKeyID: sql.Null[int]{
 			V:     738,
 			Valid: true,
 		},
 		Origin: rides.Coordinate{
-			Lat:  1,
-			Long: 2,
+			Lat:  72,
+			Long: 72,
 		},
 		Target: rides.Coordinate{
-			Lat:  3,
-			Long: 4,
+			Lat:  72,
+			Long: 72,
 		},
-		StripeChargeID: sql.Null[string]{},
-		UserID:         *users.TestUser1ID,
+		StripeChargeID: sql.Null[string]{
+			V:     "ch_456",
+			Valid: true,
+		},
+		UserID: *users.TestUser2ID,
 	}
 	TestNewRide = &rides.Ride{
 		ID:               1442,
@@ -149,15 +152,20 @@ func TestRideService_CreateRide(t *testing.T) {
 func TestRideService_UpdateRide(t *testing.T) {
 	t.Parallel()
 	updatedRide := &rides.Ride{
-		ID:               TestExistingRide.ID,
-		IdempotencyKeyID: TestExistingRide.IdempotencyKeyID,
-		Origin:           TestExistingRide.Origin,
-		Target: rides.Coordinate{
-			Lat:  TestExistingRide.Target.Long + 10.0,
-			Long: TestExistingRide.Target.Long + 10.0,
+		ID: 1442,
+		IdempotencyKeyID: sql.Null[int]{
+			V:     738,
+			Valid: true,
 		},
-		StripeChargeID: sql.Null[string]{},
-		UserID:         TestExistingRide.UserID,
+		Origin: rides.Coordinate{
+			Lat:  100,
+			Long: 100,
+		},
+		Target: rides.Coordinate{
+			Lat:  100,
+			Long: 100,
+		},
+		UserID: 456,
 	}
 	tests := []struct {
 		desc string

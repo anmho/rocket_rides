@@ -77,7 +77,7 @@ func createPostgres(ctx context.Context, t *testing.T) *postgres.PostgresContain
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
-				WithStartupTimeout(5*time.Second),
+				WithStartupTimeout(10*time.Second),
 		),
 	)
 	require.NoError(t, err)
